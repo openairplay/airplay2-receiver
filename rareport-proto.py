@@ -75,7 +75,6 @@ def setup_global_structs(args):
         'name': 'Camera da letto',
         'nameIsFactoryDefault': False,
         'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93', # UUID generated casually..
-        # 'pi': 'fe4826f8-c9b1-499f-9972-4449a2682337',
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': '366.0',
@@ -117,8 +116,6 @@ def setup_global_structs(args):
             "fv": "p20.78000.12",
             "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
-            # "pi": "1698df64-e8c9-4e4f-9663-5797ee57dcea",
-            # "gid": "1698df64-e8c9-4e4f-9663-5797ee57dcea",
             "gcgl": "0",
             "vn": "65537",
             }
