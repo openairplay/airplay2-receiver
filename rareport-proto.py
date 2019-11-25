@@ -222,7 +222,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             for p in params:
                 if p == b"volume":
                     print("GET_PARAMETER: %s" % p)
-                    params_res[p] = b"-10.1"
+                    params_res[p] = b"-144"
                 else:
                     print("Ops GET_PARAMETER: %s" % p)
 
