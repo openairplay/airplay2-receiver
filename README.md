@@ -94,7 +94,6 @@ Tested on Python 3.7.5 / macOS 10.15.1 with iPhone X 13.2.3
 | et | Encryption type |
 | ekey | Encryption key |
 | eiv | Encryption initialization vector |
-| sr | Sample rate |
 
 ### Second stage (stream session)
 
