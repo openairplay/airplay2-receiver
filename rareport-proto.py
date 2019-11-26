@@ -38,6 +38,7 @@ def setup_global_structs(args):
     global sonos_one_info
     global sonos_one_setup
     global sonos_one_setup_data
+    global second_stage_info
     global mdns_props
 
     EVENT_PORT= args.event_port
@@ -80,6 +81,10 @@ def setup_global_structs(args):
         'sourceVersion': '366.0',
         'statusFlags': 4
         # 'statusFlags': 0x404 # Sonos One
+        }
+
+    second_stage_info = {
+        "initialVolume": -130,
         }
 
     sonos_one_setup = {
@@ -350,35 +355,38 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
 
     def handle_info(self):
         print(self.headers)
-        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
-            content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                body = self.rfile.read(content_len)
-                plist = readPlistFromString(body)
-                self.pp.pprint(plist)
-                if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
-                    print("Sending:")
-                    self.pp.pprint(sonos_one_info)
-                    res = writePlistToString(sonos_one_info)
+        if "Content-Type" in self.headers:
+            if self.headers["Content-Type"] == HTTP_CT_BPLIST:
+                content_len = int(self.headers["Content-Length"])
+                if content_len > 0:
+                    body = self.rfile.read(content_len)
+                    plist = readPlistFromString(body)
+                    self.pp.pprint(plist)
+                    if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
+                        print("Sending:")
+                        self.pp.pprint(sonos_one_info)
+                        res = writePlistToString(sonos_one_info)
 
-                    self.send_response(200)
-                    self.send_header("Content-Length", len(res))
-                    self.send_header("Content-Type", HTTP_CT_BPLIST)
-                    self.send_header("Server", self.version_string())
-                    self.send_header("CSeq", self.headers["CSeq"])
-                    self.end_headers()
-                    self.wfile.write(res)
+                        self.send_response(200)
+                        self.send_header("Content-Length", len(res))
+                        self.send_header("Content-Type", HTTP_CT_BPLIST)
+                        self.send_header("Server", self.version_string())
+                        self.send_header("CSeq", self.headers["CSeq"])
+                        self.end_headers()
+                        self.wfile.write(res)
+                    else:
+                        print("No txtAirPlay")
+                        self.send_error(404)
+                        return
                 else:
-                    print("No txtAirPlay")
+                    print("No content")
                     self.send_error(404)
                     return
             else:
-                print("No content")
+                print("Content-Type: %s | Not implemented" % self.headers["Content-Type"])
                 self.send_error(404)
-                return
         else:
-            print("Content-Type: %s | Not implemented" % self.headers["Content-Type"])
-            res = writePlistToString(sonos_one_info)
+            res = writePlistToString(second_stage_info)
             self.send_response(200)
             self.send_header("Content-Length", len(res))
             self.send_header("Content-Type", HTTP_CT_BPLIST)
