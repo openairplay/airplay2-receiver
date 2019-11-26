@@ -16,6 +16,7 @@ from zeroconf import IPVersion, ServiceInfo, Zeroconf
 
 from biplist import readPlistFromString, writePlistToString
 
+from Crypto.Cipher import AES
 
 try: #en7 USB interface
     ifen = ni.ifaddresses("en7")
@@ -46,8 +47,9 @@ def setup_global_structs(args):
     DATA_PORT = args.data_port
     CONTROL_PORT = args.control_port
 
-    sonos_one_info = {   'OSInfo': 'Linux 3.10.53',
-        'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
+    sonos_one_info = {
+        # 'OSInfo': 'Linux 3.10.53',
+        # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
         'audioLatencies': [   {   'inputLatencyMicros': 0,
                                   'outputLatencyMicros': 400000,
                                   'type': 100},
@@ -63,13 +65,13 @@ def setup_global_structs(args):
                                   'inputLatencyMicros': 0,
                                   'outputLatencyMicros': 400000,
                                   'type': 102}],
-        'build': '16.0',
+        # 'build': '16.0',
         'deviceID': DEVICE_ID,
         'features': 2255099430193664,
         # 'features': 496155769145856, # Sonos One
-        'firmwareBuildDate': 'Nov  5 2019',
-        'firmwareRevision': '53.3-71050',
-        'hardwareRevision': '1.21.1.8-2',
+        # 'firmwareBuildDate': 'Nov  5 2019',
+        # 'firmwareRevision': '53.3-71050',
+        # 'hardwareRevision': '1.21.1.8-2',
         'keepAliveLowPower': True,
         'keepAliveSendStatsAsBody': True,
         'manufacturer': 'Sonos',
@@ -112,10 +114,10 @@ def setup_global_structs(args):
             "deviceid": DEVICE_ID,
             "features": "0x40784a00,0x80300",
             "flags": "0x4",
-            "name": "GINO", # random
-            "model": "GIO", # random
-            "manufacturer": "Pino", # random
-            "serialNumber": "01234xX321", # random
+            # "name": "GINO", # random
+            # "model": "GIO", # random
+            # "manufacturer": "Pino", # random
+            # "serialNumber": "01234xX321", # random
             "protovers": "1.1",
             "acl": "0",
             "rsf": "0x0",
@@ -123,7 +125,8 @@ def setup_global_structs(args):
             "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gcgl": "0",
-            "vn": "65537",
+            # "vn": "65537",
+            # "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f",
             }
 
 class AP2RTSP(http.server.BaseHTTPRequestHandler):
@@ -189,9 +192,11 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                     print("Sending EVENT:")
                     sonos_one_setup["eventPort"] = EVENT_PORT
 
+                    self.server.queue_aes.put(plist["eiv"])
+                    self.server.queue_aes.put(plist["ekey"])
+
                     self.pp.pprint(sonos_one_setup)
                     res = writePlistToString(sonos_one_setup)
-
                     self.send_response(200)
                     self.send_header("Content-Length", len(res))
                     self.send_header("Content-Type", HTTP_CT_BPLIST)
@@ -465,27 +470,37 @@ def spawn_event_server():
     p.start()
     return port, p
 
-def data_server(port):
-    def parse_data(data):
-        pass
+def data_server(port, queue):
+
+    iv = queue.get()
+    key = queue.get()
+    cipher = AES.new(key, AES.MODE_CBC, iv)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     addr = ("0.0.0.0", port)
     sock.bind(addr)
+    
+    with open("dump.bin", "wb") as f:
+        try:
+            while True:
+                data, address = sock.recvfrom(4096)
+                if data:
+                    plen = len(data)
+                    pplen = plen - 12
+                    data = data[:pplen]
+                    cplen = pplen & ~0xf
+                    ddata = cipher.decrypt(data[:cplen])
+                    f.write(ddata + data[cplen:])
+        except KeyboardInterrupt:
+            pass
+        except Excetion as e:
+            f.write(e)
+        finally:
+            sock.close()
 
-    try:
-        while True:
-            data, address = sock.recvfrom(4096)
-            if data:
-                parse_data(data)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        sock.close()
-
-def spawn_data_server():
+def spawn_data_server(q):
     port = get_free_port()
-    p = multiprocessing.Process(target=data_server, args=(port,))
+    p = multiprocessing.Process(target=data_server, args=(port, q))
     p.start()
     return port, p
 
@@ -525,6 +540,8 @@ if __name__ == "__main__":
 
     setup_global_structs(args)
 
+    queue_aes = multiprocessing.Queue()
+
     if not args.event_port:
         EVENT_PORT, event_p = spawn_event_server()
     else:
@@ -532,7 +549,7 @@ if __name__ == "__main__":
         event_p = None
 
     if not args.data_port:
-        DATA_PORT, data_p = spawn_data_server()
+        DATA_PORT, data_p = spawn_data_server(queue_aes)
     else:
         DATA_PORT = args.data_port
         data_p = None
@@ -557,6 +574,7 @@ if __name__ == "__main__":
         PORT = 7000
 
         with socketserver.TCPServer(("0.0.0.0", PORT), AP2RTSP) as httpd:
+            httpd.queue_aes = queue_aes
             print("serving at port", PORT)
             httpd.serve_forever()
     except KeyboardInterrupt:
@@ -577,4 +595,5 @@ if __name__ == "__main__":
             print("Shutting down control server...")
             control_p.terminate()
             control_p.join()
-
+        queue_aes.close()
+        queue_aes.join_thread()
