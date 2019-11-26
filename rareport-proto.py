@@ -4,6 +4,7 @@ import time
 import struct
 import socket
 import argparse
+import multiprocessing
 
 import pprint
 
@@ -427,16 +428,120 @@ def unregister_mdns(zeroconf, info):
     zeroconf.close()
 
 
+def get_free_port():
+    free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    free_socket.bind(('0.0.0.0', 0))
+    free_socket.listen(5)
+    port = free_socket.getsockname()[1]
+    free_socket.close()
+    return port
+
+
+def event_server(port):
+    def parse_data(data):
+        pass
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    addr = ("0.0.0.0", port)
+    sock.bind(addr)
+    sock.listen(1)
+
+    try:
+        while True:
+            conn, addr = sock.accept()
+            try:
+                data = conn.recv(4096)
+                parse_data(data)
+            finally:
+                conn.close()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
+
+def spawn_event_server():
+    port = get_free_port()
+    p = multiprocessing.Process(target=event_server, args=(port,))
+    p.start()
+    return port, p
+
+def data_server(port):
+    def parse_data(data):
+        pass
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    addr = ("0.0.0.0", port)
+    sock.bind(addr)
+
+    try:
+        while True:
+            data, address = sock.recvfrom(4096)
+            if data:
+                parse_data(data)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
+
+def spawn_data_server():
+    port = get_free_port()
+    p = multiprocessing.Process(target=data_server, args=(port,))
+    p.start()
+    return port, p
+
+def control_server(port):
+    def parse_data(data):
+        pass
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    addr = ("0.0.0.0", port)
+    sock.bind(addr)
+
+    try:
+        while True:
+            data, address = sock.recvfrom(4096)
+            if data:
+                parse_data(data)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
+
+def spawn_control_server():
+    port = get_free_port()
+    p = multiprocessing.Process(target=control_server, args=(port,))
+    p.start()
+    return port, p
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog='rareport-proto')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
-    parser.add_argument("-e", "--event-port", type=int, required=True, help="Event port")
-    parser.add_argument("-d", "--data-port", type=int, required=True, help="Data port")
-    parser.add_argument("-c", "--control-port", type=int, required=True, help="Control port")
+    parser.add_argument("-e", "--event-port", type=int, help="Event port")
+    parser.add_argument("-d", "--data-port", type=int,  help="Data port")
+    parser.add_argument("-c", "--control-port", type=int, help="Control port")
     args = parser.parse_args()
 
     setup_global_structs(args)
+
+    if not args.event_port:
+        EVENT_PORT, event_p = spawn_event_server()
+    else:
+        EVENT_PORT = args.event_port
+        event_p = None
+
+    if not args.data_port:
+        DATA_PORT, data_p = spawn_data_server()
+    else:
+        DATA_PORT = args.data_port
+        data_p = None
+
+    if not args.control_port:
+        CONTROL_PORT, control_p = spawn_control_server()
+    else:
+        CONTROL_PORT = args.control_port
+        control_p = None
 
     print("Interface: %s" % IFEN)
     print("IPv4: %s" % IPV4)
@@ -445,7 +550,6 @@ if __name__ == "__main__":
     print("[UDP] dataPort: %d" % DATA_PORT)
     print("[UDP] controlPort: %d" % CONTROL_PORT)
     print()
-    input("Open thos ports and press enter when ready...")
 
     mdns = register_mdns(args.mdns)
     print("Starting RSTP server, press Ctrl-C to exit...")
@@ -458,6 +562,19 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        print("Shutting down...")
+        print("Shutting down mDNS...")
         unregister_mdns(*mdns)
+
+        if event_p:
+            print("Shutting down event server...")
+            event_p.terminate()
+            event_p.join()
+        if data_p:
+            print("Shutting down data server...")
+            data_p.terminate()
+            data_p.join()
+        if control_p:
+            print("Shutting down control server...")
+            control_p.terminate()
+            control_p.join()
 
