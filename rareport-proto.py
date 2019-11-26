@@ -18,6 +18,8 @@ from biplist import readPlistFromString, writePlistToString
 
 from Crypto.Cipher import AES
 
+FEATURES = 2255099430193664
+
 try: #en7 USB interface
     ifen = ni.ifaddresses("en7")
     IFEN = "en7"
@@ -67,7 +69,7 @@ def setup_global_structs(args):
                                   'type': 102}],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
-        'features': 2255099430193664,
+        'features': FEATURES,
         # 'features': 496155769145856, # Sonos One
         # 'firmwareBuildDate': 'Nov  5 2019',
         # 'firmwareRevision': '53.3-71050',
@@ -112,7 +114,7 @@ def setup_global_structs(args):
     mdns_props = {
             "srcvers": SERVER_VERSION,
             "deviceid": DEVICE_ID,
-            "features": "0x40784a00,0x80300",
+            "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
             "flags": "0x4",
             # "name": "GINO", # random
             # "model": "GIO", # random
