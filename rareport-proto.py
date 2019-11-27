@@ -19,6 +19,7 @@ from biplist import readPlistFromString, writePlistToString
 from Crypto.Cipher import AES
 
 FEATURES = 2255099430193664
+FEATURES ^= (1 << 14) # FairPlay auth not really needed in this weird situation
 
 try: #en7 USB interface
     ifen = ni.ifaddresses("en7")
@@ -84,7 +85,7 @@ def setup_global_structs(args):
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': '366.0',
-        'statusFlags': 4
+        'statusFlags': 4,
         # 'statusFlags': 0x404 # Sonos One
         }
 
@@ -474,8 +475,12 @@ def spawn_event_server():
 
 def data_server(port, queue):
 
-    iv = queue.get()
-    key = queue.get()
+    try:
+        iv = queue.get()
+        key = queue.get()
+    except KeyboardInterrupt:
+        return
+
     cipher = AES.new(key, AES.MODE_CBC, iv)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
