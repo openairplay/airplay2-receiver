@@ -4,6 +4,7 @@ import time
 import struct
 import socket
 import argparse
+import tempfile
 import multiprocessing
 
 import pprint
@@ -35,6 +36,8 @@ IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
 HTTP_CT_PARAM = "text/parameters"
+HTTP_CT_IMAGE = "image/jpeg"
+HTTP_CT_DMAP = "application/x-dmap-tagged"
 
 def setup_global_structs(args):
     global EVENT_PORT
@@ -253,17 +256,29 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         print("SET_PARAMETER %s" % self.path)
         print(self.headers)
         params_res = {}
+        content_type = self.headers["Content-Type"]
         content_len = int(self.headers["Content-Length"])
-        if content_len > 0:
-            body = self.rfile.read(content_len)
-            params = body.splitlines()
-            for p in params:
-                pp = p.split(b":")
-                if pp[0] == b"volume":
-                    print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
-                else:
-                    print("Ops SET_PARAMETER: %s" % p)
-
+        if content_type == HTTP_CT_PARAM:
+            if content_len > 0:
+                body = self.rfile.read(content_len)
+                params = body.splitlines()
+                for p in params:
+                    pp = p.split(b":")
+                    if pp[0] in [b"volume", b"progress"]:
+                        print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
+                    else:
+                        print("Ops SET_PARAMETER: %s" % p)
+        elif content_type == HTTP_CT_IMAGE:
+            if content_len > 0:
+                fname = None
+                with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False) as f:
+                    f.write(self.rfile.read(content_len))
+                    fname = f.name
+                print("Artwork saved to %s" % fname)
+        elif content_type == HTTP_CT_DMAP:
+            if content_len > 0:
+                self.rfile.read(content_len)
+                print("Now plaing DAAP info. (need a daap parser here)")
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -326,10 +341,13 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
                 plist = readPlistFromString(body)
                 newin = []
-                for p in plist["params"]["mrSupportedCommandsFromSender"]:
-                    iplist = readPlistFromString(p)
-                    newin.append(iplist)
-                plist["params"]["mrSupportedCommandsFromSender"] = newin
+                if "mrSupportedCommandsFromSender" in plist["params"]:
+                    for p in plist["params"]["mrSupportedCommandsFromSender"]:
+                        iplist = readPlistFromString(p)
+                        newin.append(iplist)
+                    plist["params"]["mrSupportedCommandsFromSender"] = newin
+                if "params" in plist["params"] and "kMRMediaRemoteNowPlayingInfoArtworkData" in plist["params"]["params"]:
+                    plist["params"]["params"]["kMRMediaRemoteNowPlayingInfoArtworkData"] = "<redacted ..too long>"
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
