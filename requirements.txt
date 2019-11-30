@@ -2,3 +2,4 @@ netifaces
 zeroconf
 biplist
 PyCrypto
+hexdump

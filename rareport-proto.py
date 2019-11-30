@@ -19,6 +19,8 @@ from biplist import readPlistFromString, writePlistToString
 
 from Crypto.Cipher import AES
 
+from hexdump import hexdump
+
 FEATURES = 2255099430193664
 FEATURES ^= (1 << 14) # FairPlay auth not really needed in this weird situation
 
@@ -161,6 +163,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         return "AirTunes/%s" % SERVER_VERSION
 
     def do_GET(self):
+        print(self.headers)
         if self.path == "/info":
             print("GET /info")
             self.handle_info()
@@ -169,7 +172,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        print(self.path)
+        print(self.headers)
         if self.path == "/command":
             print("POST /command")
             self.handle_command()
@@ -188,10 +191,12 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         active_remote = self.headers.get("Active-Remote")
         ua = self.headers.get("User-Agent")
         print("SETUP %s" % self.path)
+        print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
                 if "streams" not in plist:
@@ -235,6 +240,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
+            hexdump(body)
             params = body.splitlines()
             for p in params:
                 if p == b"volume":
@@ -261,6 +267,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         if content_type == HTTP_CT_PARAM:
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 params = body.splitlines()
                 for p in params:
                     pp = p.split(b":")
@@ -291,6 +298,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -305,6 +313,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -318,6 +327,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
+            hexdump(body)
             plist = readPlistFromString(body)
             self.pp.pprint(plist)
         self.send_response(200)
@@ -334,11 +344,11 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_command(self):
-        print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 newin = []
                 if "mrSupportedCommandsFromSender" in plist["params"]:
@@ -355,11 +365,11 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_feedback(self):
-        print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -368,11 +378,11 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_audiomode(self):
-        print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
+                hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -381,12 +391,12 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_info(self):
-        print(self.headers)
         if "Content-Type" in self.headers:
             if self.headers["Content-Type"] == HTTP_CT_BPLIST:
                 content_len = int(self.headers["Content-Length"])
                 if content_len > 0:
                     body = self.rfile.read(content_len)
+                    hexdump(body)
                     plist = readPlistFromString(body)
                     self.pp.pprint(plist)
                     if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
@@ -518,7 +528,7 @@ def data_server(port, queue):
                     f.write(ddata + data[cplen:])
         except KeyboardInterrupt:
             pass
-        except Excetion as e:
+        except Exception as e:
             f.write(e)
         finally:
             sock.close()
@@ -530,22 +540,36 @@ def spawn_data_server(q):
     return port, p
 
 def control_server(port):
-    def parse_data(data):
-        pass
+    def parse_data(f, data):
+        version = (data[0] & 0b11000000) >> 6
+        padding = (data[0] & 0b00100000) >> 5
+        count = data[0] & 0b00011111
+        ptype = data[1]
+        plen = ((data[3] | data[2] << 8) + 1) * 4
+        #Time announce: rtpTime 2963156145, rtpTimeRemote 2963078970; net: 1575137896.1443658 (8658393484459298050); nowHost: 303225.6794785
+        if ptype == 215:
+            rtpTimeRemote = struct.unpack(">I", data[4:8])[0]
+            net = struct.unpack(">Q", data[8:16])[0] / 10**9
+            rtpTime = struct.unpack(">I", data[16:20])[0]
+            net_base = struct.unpack(">Q", data[20:28])[0]
+            f.write(b"Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)\n" % (rtpTimeRemote, rtpTime, net, net_base))
+        else:
+            f.write(b"vs=%d pad=%d cn=%d type=%d len=%d ssync=%d plen=%d\n" % (version, padding, count, ptype, plen, syncs, len(data)))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     addr = ("0.0.0.0", port)
     sock.bind(addr)
 
-    try:
-        while True:
-            data, address = sock.recvfrom(4096)
-            if data:
-                parse_data(data)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        sock.close()
+    with open("control.txt", "wb", buffering=0) as f:
+        try:
+            while True:
+                data, address = sock.recvfrom(4096)
+                if data:
+                    parse_data(f, data)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            sock.close()
 
 def spawn_control_server():
     port = get_free_port()
