@@ -12,14 +12,14 @@ import pprint
 import http.server
 import socketserver
 
+import pyaudio
 import netifaces as ni
+from hexdump import hexdump
+from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
-
 from biplist import readPlistFromString, writePlistToString
 
-from Crypto.Cipher import AES
-
-from hexdump import hexdump
+from libalac import *
 
 FEATURES = 2255099430193664
 FEATURES ^= (1 << 14) # FairPlay auth not really needed in this weird situation
@@ -205,7 +205,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
 
                     self.server.queue_aes.put(plist["eiv"])
                     self.server.queue_aes.put(plist["ekey"])
-
+                    print("EKEY=%d EIV=%d" % (len(plist["eiv"]), len(plist["eiv"])))
                     self.pp.pprint(sonos_one_setup)
                     res = writePlistToString(sonos_one_setup)
                     self.send_response(200)
@@ -216,6 +216,8 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(res)
                 else:
+                    self.server.queue_aes.put(plist["streams"][0]["shk"])
+                    print("SHK=%d" % (len(plist["streams"][0]["shk"])))
                     print("Sending CONTROL/DATA:")
                     sonos_one_setup_data["streams"][0]["controlPort"] = CONTROL_PORT
                     sonos_one_setup_data["streams"][0]["dataPort"] = DATA_PORT
@@ -502,36 +504,80 @@ def spawn_event_server():
     return port, p
 
 def data_server(port, queue):
+    def decrypt(data, key, nonce, tag, aad):
+        c = ChaCha20_Poly1305.new(key=key, nonce=nonce)
+        c.update(aad)
+        data = c.decrypt_and_verify(data, tag)
+        return data
+
+    def process_packet(data, key):
+        aad = data[4:12]
+        nonce = data[-8:]
+        tag = data[-24:-8]
+        payload = data[12:-24]
+        plain = decrypt(payload, key, nonce, tag, aad)
+        err, decoded = libalac_decode_frame(plain)
+        return decoded
+
+    def parse_data(f, data):
+        version = (data[0] & 0b11000000) >> 6
+        padding = (data[0] & 0b00100000) >> 5
+        extension = (data[0] & 0b00010000) >> 4
+        csrc_count = data[0] & 0b00001111
+        marker = (data[1] & 0b10000000) >> 7
+        payload_type = data[1] & 0b01111111
+        sequence_no = struct.unpack(">H", data[2:4])[0]
+        timestamp = struct.unpack(">I", data[4:8])[0]
+        ssrc = struct.unpack(">I", data[8:12])[0]
+        # nonce = data[-8:]
+        # tag = data[-24:-8]
+        # aad = data[4:12]
+
+        f.write(b"v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d len=%d\n" % (version, padding,
+             extension, csrc_count,
+             marker, payload_type,
+             sequence_no, timestamp,
+             ssrc, len(data)))
+        # payload = data[12:-24]
+        # plain = decrypt(payload, key, nonce, tag, aad)
+        # err, decoded = libalac_decode_frame(plain)
+        # f.write(res.encode()+b"\n")
 
     try:
         iv = queue.get()
         key = queue.get()
+        shk = queue.get()
     except KeyboardInterrupt:
         return
-
-    cipher = AES.new(key, AES.MODE_CBC, iv)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     addr = ("0.0.0.0", port)
     sock.bind(addr)
-    
-    with open("dump.bin", "wb") as f:
+
+    with open("data.txt", "wb", buffering=0) as f:
+        res = libalac_init()
+        f.write(b"libalac_init=%d\n" % res)
+        pa = pyaudio.PyAudio()
+        stream = pa.open(format=pa.get_format_from_width(2),
+                         channels=2,
+                         rate=44100,
+                         output=True)
         try:
             while True:
                 data, address = sock.recvfrom(4096)
                 if data:
-                    plen = len(data)
-                    pplen = plen - 12
-                    data = data[:pplen]
-                    cplen = pplen & ~0xf
-                    ddata = cipher.decrypt(data[:cplen])
-                    f.write(ddata + data[cplen:])
+                    # parse_data(f, data)
+                    audio = process_packet(data, shk)
+                    stream.write(audio)
         except KeyboardInterrupt:
             pass
         except Exception as e:
             f.write(e)
         finally:
             sock.close()
+            stream.close()
+            pa.terminate()
+            libalac_terminate()
 
 def spawn_data_server(q):
     port = get_free_port()
@@ -546,13 +592,14 @@ def control_server(port):
         count = data[0] & 0b00011111
         ptype = data[1]
         plen = ((data[3] | data[2] << 8) + 1) * 4
-        #Time announce: rtpTime 2963156145, rtpTimeRemote 2963078970; net: 1575137896.1443658 (8658393484459298050); nowHost: 303225.6794785
+
         if ptype == 215:
             rtpTimeRemote = struct.unpack(">I", data[4:8])[0]
             net = struct.unpack(">Q", data[8:16])[0] / 10**9
             rtpTime = struct.unpack(">I", data[16:20])[0]
             net_base = struct.unpack(">Q", data[20:28])[0]
-            f.write(b"Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)\n" % (rtpTimeRemote, rtpTime, net, net_base))
+            f.write(b"vs=%d pad=%d cn=%d type=%d len=%d plen=%d\n" % (version, padding, count, ptype, plen,  len(data)))
+            f.write(b"    Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)\n" % (rtpTimeRemote, rtpTime, net, net_base))
         else:
             f.write(b"vs=%d pad=%d cn=%d type=%d len=%d ssync=%d plen=%d\n" % (version, padding, count, ptype, plen, syncs, len(data)))
 
