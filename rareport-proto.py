@@ -236,7 +236,11 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                     print("Sending CONTROL/DATA:")
                     sonos_one_setup_data["streams"][0]["controlPort"] = CONTROL_PORT
                     sonos_one_setup_data["streams"][0]["dataPort"] = DATA_PORT
-                    
+                    stream_type = plist["streams"][0]["type"]
+                    if stream_type == 103:
+                        sonos_one_setup_data["streams"][0]["type"] = stream_type
+                        sonos_one_setup_data["streams"][0]["audioBufferSize"] = 8388608
+
                     self.pp.pprint(sonos_one_setup_data)
                     res = writePlistToString(sonos_one_setup_data)
 
@@ -310,6 +314,21 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
 
     def do_RECORD(self):
         print("RECORD %s" % self.path)
+        print(self.headers)
+        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
+            content_len = int(self.headers["Content-Length"])
+            if content_len > 0:
+                body = self.rfile.read(content_len)
+                hexdump(body)
+                plist = readPlistFromString(body)
+                self.pp.pprint(plist)
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+    def do_SETRATEANCHORTIME(self):
+        print("SETRATEANCHORTIME %s" % self.path)
         print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
@@ -528,6 +547,69 @@ def spawn_event_server():
     p.start()
     return port, p
 
+def data_server_tcp(port, queue):
+    def decrypt(data, key, nonce, tag, aad):
+        c = ChaCha20_Poly1305.new(key=key, nonce=nonce)
+        c.update(aad)
+        data = c.decrypt_and_verify(data, tag)
+        return data
+
+    def parse_data(f, data, key):
+        version = (data[0] & 0b11000000) >> 6
+        padding = (data[0] & 0b00100000) >> 5
+        extension = (data[0] & 0b00010000) >> 4
+        csrc_count = data[0] & 0b00001111
+        marker = (data[1] & 0b10000000) >> 7
+        payload_type = data[1] & 0b01111111
+        sequence_no = struct.unpack(">H", data[2:4])[0]
+        timestamp = struct.unpack(">I", data[4:8])[0]
+        ssrc = struct.unpack(">I", data[8:12])[0]
+        nonce = data[-8:]
+        tag = data[-24:-8]
+        aad = data[4:12]
+
+        f.write(b"v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d len=%d\n" % (version, padding,
+             extension, csrc_count,
+             marker, payload_type,
+             sequence_no, timestamp,
+             ssrc, len(data)))
+
+        payload = data[12:-24]
+        plain = decrypt(payload, key, nonce, tag, aad)
+        res = hexdump(plain, result="return")
+        f.write(res.encode()+b"\n")
+
+    try:
+        iv = queue.get()
+        key = queue.get()
+        shk = queue.get()
+    except KeyboardInterrupt:
+        return
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    addr = ("0.0.0.0", port)
+    sock.bind(addr)
+    sock.listen(1)
+
+    conn, addr = sock.accept()
+    with open("data.txt", "wb", buffering=0) as f:
+        try:
+            while True:
+                data_len = struct.unpack(">H", conn.recv(2, socket.MSG_WAITALL))[0]
+                data = conn.recv(data_len-2, socket.MSG_WAITALL)
+                parse_data(f, data, shk)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            conn.close()
+            sock.close()
+
+def spawn_data_server_tcp(q):
+    port = get_free_port()
+    p = multiprocessing.Process(target=data_server_tcp, args=(port,q,))
+    p.start()
+    return port, p
+
 def data_server(port, queue):
     def decrypt(data, key, nonce, tag, aad):
         c = ChaCha20_Poly1305.new(key=key, nonce=nonce)
@@ -670,7 +752,7 @@ if __name__ == "__main__":
         event_p = None
 
     if not args.data_port:
-        DATA_PORT, data_p = spawn_data_server(queue_aes)
+        DATA_PORT, data_p = spawn_data_server_tcp(queue_aes)
     else:
         DATA_PORT = args.data_port
         data_p = None
