@@ -182,6 +182,21 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         elif self.path == "/audioMode":
             print("POST /audioMode")
             self.handle_audiomode()
+        elif self.path == "/auth-setup":
+            print("POST /auth-setup")
+            self.handle_auth_setup()
+        elif self.path == "/fp-setup":
+            print("POST /fp-setup")
+            self.handle_auth_setup()
+        elif self.path == "/fp-setup2":
+            print("POST /fp-setup2")
+            self.handle_auth_setup()
+        elif self.path == "/pair-setup":
+            print("POST /pair-setup")
+            self.handle_auth_setup()
+        elif self.path == "/pair-verify":
+            print("POST /pair-verify")
+            self.handle_auth_setup()
         else:
             print("POST %s Not implemented!" % self.path)
             self.send_error(404)
@@ -387,6 +402,16 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                 hexdump(body)
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+    def handle_auth_setup(self):
+        content_len = int(self.headers["Content-Length"])
+        if content_len > 0:
+            body = self.rfile.read(content_len)
+            hexdump(body)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
