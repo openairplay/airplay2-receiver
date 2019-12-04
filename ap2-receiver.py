@@ -734,7 +734,7 @@ def spawn_control_server():
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(prog='rareport-proto')
+    parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     parser.add_argument("-e", "--event-port", type=int, help="Event port")
     parser.add_argument("-d", "--data-port", type=int,  help="Data port")
