@@ -19,6 +19,7 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
+from ap2.hap import Hap, HAPSocket
 from libalac import *
 
 FEATURES = 2255099430193664
@@ -37,6 +38,7 @@ IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
+HTTP_CT_OCTET = "application/octet-stream"
 HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
@@ -134,10 +136,10 @@ def setup_global_structs(args):
             "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gcgl": "0",
             # "vn": "65537",
-            # "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f",
+            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f",
             }
 
-class AP2RTSP(http.server.BaseHTTPRequestHandler):
+class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     pp = pprint.PrettyPrinter()
 
@@ -187,16 +189,16 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             self.handle_auth_setup()
         elif self.path == "/fp-setup":
             print("POST /fp-setup")
-            self.handle_auth_setup()
+            self.handle_fp_setup()
         elif self.path == "/fp-setup2":
             print("POST /fp-setup2")
             self.handle_auth_setup()
         elif self.path == "/pair-setup":
             print("POST /pair-setup")
-            self.handle_auth_setup()
+            self.handle_pair_setup()
         elif self.path == "/pair-verify":
             print("POST /pair-verify")
-            self.handle_auth_setup()
+            self.handle_pair_verify()
         else:
             print("POST %s Not implemented!" % self.path)
             self.send_error(404)
@@ -211,7 +213,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
                 if "streams" not in plist:
@@ -261,7 +263,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
-            hexdump(body)
+
             params = body.splitlines()
             for p in params:
                 if p == b"volume":
@@ -288,7 +290,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         if content_type == HTTP_CT_PARAM:
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 params = body.splitlines()
                 for p in params:
                     pp = p.split(b":")
@@ -319,7 +321,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -334,7 +336,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -349,7 +351,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -363,7 +365,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
-            hexdump(body)
+
             plist = readPlistFromString(body)
             self.pp.pprint(plist)
         self.send_response(200)
@@ -384,7 +386,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 newin = []
                 if "mrSupportedCommandsFromSender" in plist["params"]:
@@ -405,7 +407,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -418,7 +420,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
-                hexdump(body)
+
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -431,10 +433,64 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
         if content_len > 0:
             body = self.rfile.read(content_len)
             hexdump(body)
+
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+
+    def handle_fp_setup(self):
+        content_len = int(self.headers["Content-Length"])
+        if content_len > 0:
+            body = self.rfile.read(content_len)
+            hexdump(body)
+
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+    def handle_pair_setup(self):
+        content_len = int(self.headers["Content-Length"])
+
+        body = self.rfile.read(content_len)
+
+        if not self.server.hap:
+            self.server.hap = Hap()
+        res = self.server.hap.pair_setup(body)
+
+        self.send_response(200)
+        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Type", HTTP_CT_BPLIST)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+        self.wfile.write(res)
+
+        if self.server.hap.encrypted:
+            hexdump(self.server.hap.accessory_shared_key)
+            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+
+    def handle_pair_verify(self):
+        content_len = int(self.headers["Content-Length"])
+
+        body = self.rfile.read(content_len)
+
+        if not self.server.hap:
+            self.server.hap = Hap()
+        res = self.server.hap.pair_verify(body)
+
+        self.send_response(200)
+        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Type", HTTP_CT_OCTET)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+        self.wfile.write(res)
+
+        if self.server.hap.encrypted:
+            hexdump(self.server.hap.accessory_shared_key)
+            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 
     def handle_info(self):
         if "Content-Type" in self.headers:
@@ -442,7 +498,7 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
                 content_len = int(self.headers["Content-Length"])
                 if content_len > 0:
                     body = self.rfile.read(content_len)
-                    hexdump(body)
+
                     plist = readPlistFromString(body)
                     self.pp.pprint(plist)
                     if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
@@ -477,6 +533,16 @@ class AP2RTSP(http.server.BaseHTTPRequestHandler):
             self.send_header("CSeq", self.headers["CSeq"])
             self.end_headers()
             self.wfile.write(res)
+
+    def upgrade_to_encrypted(self, shared_key):
+        self.request = self.server.upgrade_to_encrypted(
+                                    self.client_address,
+                                    shared_key)
+        self.connection = self.request
+        self.rfile = self.connection.makefile('rb', self.rbufsize)
+        self.wfile = self.connection.makefile('wb')
+        self.is_encrypted = True
+        print("----- ENCRYPTED CHANNEL -----")
 
 def register_mdns(receiver_name):
     addresses = []
@@ -732,6 +798,26 @@ def spawn_control_server():
     return port, p
 
 
+class AP2Server(socketserver.TCPServer):
+
+    def __init__(self, addr_port, handler):
+        super().__init__(addr_port, handler)
+        self.connections = {}
+
+    #Override
+    def get_request(self):
+        client_socket, client_addr = super().get_request()
+        print("Got connection with %s:%d" % client_addr)
+        self.connections[client_addr] = client_socket
+        return (client_socket, client_addr)
+
+    def upgrade_to_encrypted(self, client_address, shared_key):
+        client_socket = self.connections[client_address]
+        hap_socket = HAPSocket(client_socket, shared_key)
+        self.connections[client_address] = hap_socket
+        return hap_socket
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
@@ -752,7 +838,7 @@ if __name__ == "__main__":
         event_p = None
 
     if not args.data_port:
-        DATA_PORT, data_p = spawn_data_server_tcp(queue_aes)
+        DATA_PORT, data_p = spawn_data_server(queue_aes)
     else:
         DATA_PORT = args.data_port
         data_p = None
@@ -776,8 +862,11 @@ if __name__ == "__main__":
     try:
         PORT = 7000
 
-        with socketserver.TCPServer(("0.0.0.0", PORT), AP2RTSP) as httpd:
+        with AP2Server(("0.0.0.0", PORT), AP2Handler) as httpd:
             httpd.queue_aes = queue_aes
+            httpd.hap = None
+            httpd.connections = {}
+            httpd.enc_layer = False
             print("serving at port", PORT)
             httpd.serve_forever()
     except KeyboardInterrupt:
