@@ -17,11 +17,38 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
-from ap2.hap import Hap, HAPSocket
-from libalac import *
+from ap2.pairing.hap import Hap, HAPSocket
+from ap2.connections.event import Event
+from ap2.connections.stream import Stream
 
-FEATURES = 2255099430193664
-FEATURES ^= (1 << 14) # FairPlay auth not really needed in this weird situation
+# No Auth - coreutils, PairSetupMfi
+# MFi Verify fail error after pair-setup[2/5]
+FEATURES = 0x88340405f8a00
+# No Auth - HK and coreutils
+# Stops after pairing (setup [5/5] verify [2/2])with no supported auth error
+FEATURES = 0xc340405f8a00
+# No Auth = HK, coreutils, PairSetupMFi
+# MFi Verify fail error after pair-setup[2/5]
+FEATURES = 0x8c340405f8a00
+# Mfi Auth - HK and coreutils
+# All encrypt after pairing (setup [5/5] verify [2/2])
+FEATURES = 0xc340445f8a00
+# FairPlay - HK and coreutils
+# Stops after pairing (setup [5/5] verify [2/2])with no supported auth error
+FEATURES = 0xc340405fca00
+# FairPlay - HK and coreutils and transient
+# fp-setup after pair-setup[2/5]
+FEATURES = 0x1c340405fca00
+# MFi - HK and coreutils and transient
+# auth-setup after pair-setup[2/5]
+FEATURES = 0x1c340445f8a00
+# No Auth - No enc - PairSetupMFi
+# Works!!
+FEATURES = 0x8030040780a00
+# No Auth - No enc
+# No supported authentication types.
+# FEATURES = 0x30040780a00
+# FEATURES = 0x8030040780a00 | (1 << 27)
 
 try: #en7 USB interface
     ifen = ni.ifaddresses("en7")
