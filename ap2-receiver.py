@@ -5,14 +5,12 @@ import struct
 import socket
 import argparse
 import tempfile
-import multiprocessing
 
 import pprint
 
 import http.server
 import socketserver
 
-import pyaudio
 import netifaces as ni
 from hexdump import hexdump
 from Crypto.Cipher import ChaCha20_Poly1305, AES
@@ -44,18 +42,11 @@ HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 
 def setup_global_structs(args):
-    global EVENT_PORT
-    global DATA_PORT
-    global CONTROL_PORT
     global sonos_one_info
     global sonos_one_setup
     global sonos_one_setup_data
     global second_stage_info
     global mdns_props
-
-    EVENT_PORT= args.event_port
-    DATA_PORT = args.data_port
-    CONTROL_PORT = args.control_port
 
     sonos_one_info = {
         # 'OSInfo': 'Linux 3.10.53',
@@ -101,7 +92,7 @@ def setup_global_structs(args):
         }
 
     sonos_one_setup = {
-            'eventPort': EVENT_PORT,  # AP2 receiver event server
+            'eventPort': 0,  # AP2 receiver event server
             'timingPort': 0,
             'timingPeerInfo': {
                 'Addresses': [
@@ -113,8 +104,8 @@ def setup_global_structs(args):
             'streams': [
                 {
                     'type': 96, 
-                    'dataPort': DATA_PORT, # AP2 receiver data server 
-                    'controlPort': CONTROL_PORT # AP2 receiver control server
+                    'dataPort': 0, # AP2 receiver data server 
+                    'controlPort': 0 # AP2 receiver control server
                     }
                 ]
             }
@@ -218,11 +209,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 self.pp.pprint(plist)
                 if "streams" not in plist:
                     print("Sending EVENT:")
-                    sonos_one_setup["eventPort"] = EVENT_PORT
+                    event_port, self.event_proc = Event.spawn()
+                    sonos_one_setup["eventPort"] = event_port
+                    print("[+] eventPort=%d" % event_port)
 
-                    self.server.queue_aes.put(plist["eiv"])
-                    self.server.queue_aes.put(plist["ekey"])
-                    print("EKEY=%d EIV=%d" % (len(plist["eiv"]), len(plist["eiv"])))
                     self.pp.pprint(sonos_one_setup)
                     res = writePlistToString(sonos_one_setup)
                     self.send_response(200)
@@ -233,14 +223,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(res)
                 else:
-                    self.server.queue_aes.put(plist["streams"][0]["shk"])
-                    print("SHK=%d" % (len(plist["streams"][0]["shk"])))
                     print("Sending CONTROL/DATA:")
-                    sonos_one_setup_data["streams"][0]["controlPort"] = CONTROL_PORT
-                    sonos_one_setup_data["streams"][0]["dataPort"] = DATA_PORT
-                    stream_type = plist["streams"][0]["type"]
-                    if stream_type == 103:
-                        sonos_one_setup_data["streams"][0]["type"] = stream_type
+
+                    stream = Stream(plist["streams"][0])
+                    self.server.streams.append(stream)
+                    sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
+                    sonos_one_setup_data["streams"][0]["dataPort"] = stream.data_port
+
+                    print("[+] controlPort=%d dataPort=%d" % (stream.control_port, stream.data_port))
+                    if stream.type == Stream.BUFFERED:
+                        sonos_one_setup_data["streams"][0]["type"] = stream.type
                         sonos_one_setup_data["streams"][0]["audioBufferSize"] = 8388608
 
                     self.pp.pprint(sonos_one_setup_data)
@@ -353,6 +345,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
+                if "streams" in plist:
+                    stream_id = plist["streams"][0]["streamID"]
+                    stream = self.server.streams[stream_id]
+                    stream.teardown()
+                    del self.server.streams[stream_id]
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -454,6 +451,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
 
         body = self.rfile.read(content_len)
+        hexdump(body)
 
         if not self.server.hap:
             self.server.hap = Hap()
@@ -585,224 +583,14 @@ def get_free_port():
     return port
 
 
-def event_server(port):
-    def parse_data(data):
-        pass
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    addr = ("0.0.0.0", port)
-    sock.bind(addr)
-    sock.listen(1)
-
-    try:
-        while True:
-            conn, addr = sock.accept()
-            try:
-                data = conn.recv(4096)
-                parse_data(data)
-            finally:
-                conn.close()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        sock.close()
-
-def spawn_event_server():
-    port = get_free_port()
-    p = multiprocessing.Process(target=event_server, args=(port,))
-    p.start()
-    return port, p
-
-def data_server_tcp(port, queue):
-    def decrypt(data, key, nonce, tag, aad):
-        c = ChaCha20_Poly1305.new(key=key, nonce=nonce)
-        c.update(aad)
-        data = c.decrypt_and_verify(data, tag)
-        return data
-
-    def parse_data(f, data, key):
-        version = (data[0] & 0b11000000) >> 6
-        padding = (data[0] & 0b00100000) >> 5
-        extension = (data[0] & 0b00010000) >> 4
-        csrc_count = data[0] & 0b00001111
-        marker = (data[1] & 0b10000000) >> 7
-        payload_type = data[1] & 0b01111111
-        sequence_no = struct.unpack(">H", data[2:4])[0]
-        timestamp = struct.unpack(">I", data[4:8])[0]
-        ssrc = struct.unpack(">I", data[8:12])[0]
-        nonce = data[-8:]
-        tag = data[-24:-8]
-        aad = data[4:12]
-
-        f.write(b"v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d len=%d\n" % (version, padding,
-             extension, csrc_count,
-             marker, payload_type,
-             sequence_no, timestamp,
-             ssrc, len(data)))
-
-        payload = data[12:-24]
-        plain = decrypt(payload, key, nonce, tag, aad)
-        res = hexdump(plain, result="return")
-        f.write(res.encode()+b"\n")
-
-    try:
-        iv = queue.get()
-        key = queue.get()
-        shk = queue.get()
-    except KeyboardInterrupt:
-        return
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    addr = ("0.0.0.0", port)
-    sock.bind(addr)
-    sock.listen(1)
-
-    conn, addr = sock.accept()
-    with open("data.txt", "wb", buffering=0) as f:
-        try:
-            while True:
-                data_len = struct.unpack(">H", conn.recv(2, socket.MSG_WAITALL))[0]
-                data = conn.recv(data_len-2, socket.MSG_WAITALL)
-                parse_data(f, data, shk)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            conn.close()
-            sock.close()
-
-def spawn_data_server_tcp(q):
-    port = get_free_port()
-    p = multiprocessing.Process(target=data_server_tcp, args=(port,q,))
-    p.start()
-    return port, p
-
-def data_server(port, queue):
-    def decrypt(data, key, nonce, tag, aad):
-        c = ChaCha20_Poly1305.new(key=key, nonce=nonce)
-        c.update(aad)
-        data = c.decrypt_and_verify(data, tag)
-        return data
-
-    def process_packet(data, key):
-        aad = data[4:12]
-        nonce = data[-8:]
-        tag = data[-24:-8]
-        payload = data[12:-24]
-        plain = decrypt(payload, key, nonce, tag, aad)
-        err, decoded = libalac_decode_frame(plain)
-        return decoded
-
-    def parse_data(f, data):
-        version = (data[0] & 0b11000000) >> 6
-        padding = (data[0] & 0b00100000) >> 5
-        extension = (data[0] & 0b00010000) >> 4
-        csrc_count = data[0] & 0b00001111
-        marker = (data[1] & 0b10000000) >> 7
-        payload_type = data[1] & 0b01111111
-        sequence_no = struct.unpack(">H", data[2:4])[0]
-        timestamp = struct.unpack(">I", data[4:8])[0]
-        ssrc = struct.unpack(">I", data[8:12])[0]
-        # nonce = data[-8:]
-        # tag = data[-24:-8]
-        # aad = data[4:12]
-
-        f.write(b"v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d len=%d\n" % (version, padding,
-             extension, csrc_count,
-             marker, payload_type,
-             sequence_no, timestamp,
-             ssrc, len(data)))
-        # payload = data[12:-24]
-        # plain = decrypt(payload, key, nonce, tag, aad)
-        # err, decoded = libalac_decode_frame(plain)
-        # f.write(res.encode()+b"\n")
-
-    try:
-        iv = queue.get()
-        key = queue.get()
-        shk = queue.get()
-    except KeyboardInterrupt:
-        return
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    addr = ("0.0.0.0", port)
-    sock.bind(addr)
-
-    with open("data.txt", "wb", buffering=0) as f:
-        res = libalac_init()
-        f.write(b"libalac_init=%d\n" % res)
-        pa = pyaudio.PyAudio()
-        stream = pa.open(format=pa.get_format_from_width(2),
-                         channels=2,
-                         rate=44100,
-                         output=True)
-        try:
-            while True:
-                data, address = sock.recvfrom(4096)
-                if data:
-                    # parse_data(f, data)
-                    audio = process_packet(data, shk)
-                    stream.write(audio)
-        except KeyboardInterrupt:
-            pass
-        except Exception as e:
-            f.write(e)
-        finally:
-            sock.close()
-            stream.close()
-            pa.terminate()
-            libalac_terminate()
-
-def spawn_data_server(q):
-    port = get_free_port()
-    p = multiprocessing.Process(target=data_server, args=(port, q))
-    p.start()
-    return port, p
-
-def control_server(port):
-    def parse_data(f, data):
-        version = (data[0] & 0b11000000) >> 6
-        padding = (data[0] & 0b00100000) >> 5
-        count = data[0] & 0b00011111
-        ptype = data[1]
-        plen = ((data[3] | data[2] << 8) + 1) * 4
-
-        if ptype == 215:
-            rtpTimeRemote = struct.unpack(">I", data[4:8])[0]
-            net = struct.unpack(">Q", data[8:16])[0] / 10**9
-            rtpTime = struct.unpack(">I", data[16:20])[0]
-            net_base = struct.unpack(">Q", data[20:28])[0]
-            f.write(b"vs=%d pad=%d cn=%d type=%d len=%d plen=%d\n" % (version, padding, count, ptype, plen,  len(data)))
-            f.write(b"    Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)\n" % (rtpTimeRemote, rtpTime, net, net_base))
-        else:
-            f.write(b"vs=%d pad=%d cn=%d type=%d len=%d ssync=%d plen=%d\n" % (version, padding, count, ptype, plen, syncs, len(data)))
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    addr = ("0.0.0.0", port)
-    sock.bind(addr)
-
-    with open("control.txt", "wb", buffering=0) as f:
-        try:
-            while True:
-                data, address = sock.recvfrom(4096)
-                if data:
-                    parse_data(f, data)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            sock.close()
-
-def spawn_control_server():
-    port = get_free_port()
-    p = multiprocessing.Process(target=control_server, args=(port,))
-    p.start()
-    return port, p
-
-
 class AP2Server(socketserver.TCPServer):
 
     def __init__(self, addr_port, handler):
         super().__init__(addr_port, handler)
         self.connections = {}
+        self.hap = None
+        self.enc_layer = False
+        self.streams = []
 
     #Override
     def get_request(self):
@@ -817,44 +605,17 @@ class AP2Server(socketserver.TCPServer):
         self.connections[client_address] = hap_socket
         return hap_socket
 
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
-    parser.add_argument("-e", "--event-port", type=int, help="Event port")
-    parser.add_argument("-d", "--data-port", type=int,  help="Data port")
-    parser.add_argument("-c", "--control-port", type=int, help="Control port")
     args = parser.parse_args()
 
     setup_global_structs(args)
 
-    queue_aes = multiprocessing.Queue()
-
-    if not args.event_port:
-        EVENT_PORT, event_p = spawn_event_server()
-    else:
-        EVENT_PORT = args.event_port
-        event_p = None
-
-    if not args.data_port:
-        DATA_PORT, data_p = spawn_data_server(queue_aes)
-    else:
-        DATA_PORT = args.data_port
-        data_p = None
-
-    if not args.control_port:
-        CONTROL_PORT, control_p = spawn_control_server()
-    else:
-        CONTROL_PORT = args.control_port
-        control_p = None
-
     print("Interface: %s" % IFEN)
     print("IPv4: %s" % IPV4)
     print("IPv6: %s" % IPV6)
-    print("[TCP] eventPort: %d" % EVENT_PORT)
-    print("[UDP] dataPort: %d" % DATA_PORT)
-    print("[UDP] controlPort: %d" % CONTROL_PORT)
     print()
 
     mdns = register_mdns(args.mdns)
@@ -863,10 +624,6 @@ if __name__ == "__main__":
         PORT = 7000
 
         with AP2Server(("0.0.0.0", PORT), AP2Handler) as httpd:
-            httpd.queue_aes = queue_aes
-            httpd.hap = None
-            httpd.connections = {}
-            httpd.enc_layer = False
             print("serving at port", PORT)
             httpd.serve_forever()
     except KeyboardInterrupt:
@@ -874,18 +631,3 @@ if __name__ == "__main__":
     finally:
         print("Shutting down mDNS...")
         unregister_mdns(*mdns)
-
-        if event_p:
-            print("Shutting down event server...")
-            event_p.terminate()
-            event_p.join()
-        if data_p:
-            print("Shutting down data server...")
-            data_p.terminate()
-            data_p.join()
-        if control_p:
-            print("Shutting down control server...")
-            control_p.terminate()
-            control_p.join()
-        queue_aes.close()
-        queue_aes.join_thread()
