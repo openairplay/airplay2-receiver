@@ -29,3 +29,8 @@ python ap2-receiver.py -m myap2
 * the AirPlay 2 receiver is announced as **myap2**.
 
 Tested on Python 3.7.5 / macOS 10.15.2 with iPhone X 13.3
+
+# Protocol notes
+
+https://emanuelecozzi.net/docs/airplay2
+
