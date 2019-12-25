@@ -30,7 +30,7 @@ python ap2-receiver.py -m myap2
 
 Tested on Python 3.7.5 / macOS 10.15.2 with iPhone X 13.3
 
-# Protocol notes
+### Protocol notes
 
 https://emanuelecozzi.net/docs/airplay2
 
