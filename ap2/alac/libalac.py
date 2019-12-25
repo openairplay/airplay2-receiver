@@ -3,7 +3,7 @@ from hexdump import hexdump
 
 class AlacDecoder:
     def __init__(self):
-        self.libalac = ctypes.CDLL("./ap2/libalac-wr.dylib", use_errno=True)
+        self.libalac = ctypes.CDLL("./ap2/alac/libalac.dylib", use_errno=True)
         self.libalac.apple_alac_init.restype = ctypes.c_int
         self.libalac.apple_alac_decode_frame.restype = ctypes.c_int
         self.libalac.apple_alac_terminate.restype = ctypes.c_int

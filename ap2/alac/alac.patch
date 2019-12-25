@@ -1,0 +1,60 @@
+diff --git a/codec/makefile b/codec/makefile
+index ceea009..911fe9f 100644
+--- a/codec/makefile
++++ b/codec/makefile
+@@ -1,6 +1,6 @@
+ # libalac make
+ 
+-CFLAGS = -g -O3 -c
++CFLAGS = -g -O3 -c -fPIC
+ LFLAGS = -Wall
+ CC = g++
+ 
+@@ -16,7 +16,8 @@ $(SRCDIR)/ALACBitUtilities.h\
+ $(SRCDIR)/ALACDecoder.h \
+ $(SRCDIR)/ALACEncoder.h \
+ $(SRCDIR)/dplib.h \
+-$(SRCDIR)/matrixlib.h
++$(SRCDIR)/matrixlib.h \
++$(SRCDIR)/apple_alac.h
+ 
+ SOURCES = \
+ $(SRCDIR)/EndianPortable.c \
+@@ -28,7 +29,8 @@ $(SRCDIR)/ag_enc.c \
+ $(SRCDIR)/dp_dec.c \
+ $(SRCDIR)/dp_enc.c \
+ $(SRCDIR)/matrix_dec.c \
+-$(SRCDIR)/matrix_enc.c
++$(SRCDIR)/matrix_enc.c \
++$(SRCDIR)/apple_alac.cpp
+ 
+ OBJS = \
+ EndianPortable.o \
+@@ -40,11 +42,19 @@ ag_enc.o \
+ dp_dec.o \
+ dp_enc.o \
+ matrix_dec.o \
+-matrix_enc.o
++matrix_enc.o \
++apple_alac.o
++
++
++libalac.dylib: $(OBJS)
++	$(CC) -shared -o libalac.dylib $(OBJS)
+ 
+ libalac.a:	$(OBJS)
+ 	ar rcs libalac.a $(OBJS)
+ 
++apple_alac.o : apple_alac.cpp 
++	$(CC) -I $(INCLUDES) -D __cplusplus $(CFLAGS) apple_alac.cpp
++
+ EndianPortable.o : EndianPortable.c
+ 	$(CC) -I $(INCLUDES) $(CFLAGS) EndianPortable.c
+ 
+@@ -76,5 +86,5 @@ matrix_enc.o : matrix_enc.c
+ 	$(CC) -I $(INCLUDES) $(CFLAGS) matrix_enc.c
+ 		
+ clean:
+-	-rm $(OBJS) libalac.a
++	-rm $(OBJS) libalac.a libalac.dylib
+ 
