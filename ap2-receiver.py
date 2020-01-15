@@ -5,6 +5,7 @@ import struct
 import socket
 import argparse
 import tempfile
+import multiprocessing
 
 import pprint
 
@@ -634,6 +635,7 @@ class AP2Server(socketserver.TCPServer):
 
 if __name__ == "__main__":
 
+    multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     args = parser.parse_args()

@@ -7,3 +7,4 @@ srptools
 hkdf
 pynacl
 cryptography
+requests
