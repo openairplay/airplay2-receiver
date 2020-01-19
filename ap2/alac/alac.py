@@ -1,9 +1,17 @@
 import ctypes
+import platform
 from hexdump import hexdump
 
 class AlacDecoder:
     def __init__(self):
-        self.libalac = ctypes.CDLL("./ap2/alac/libalac.dylib", use_errno=True)
+        subsys = platform.system()
+        if subsys == "Darwin":
+            self.libalac = ctypes.CDLL("./ap2/alac/libalac.dylib", use_errno=True)
+        elif subsys == "Linux":
+            self.libalac = ctypes.CDLL("./ap2/alac/libalac.so", use_errno=True)
+        else:
+            raise OSError("%s is not supported" % subsys)
+
         self.libalac.apple_alac_init.restype = ctypes.c_int
         self.libalac.apple_alac_decode_frame.restype = ctypes.c_int
         self.libalac.apple_alac_terminate.restype = ctypes.c_int
