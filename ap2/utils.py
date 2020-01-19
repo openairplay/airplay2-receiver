@@ -53,6 +53,7 @@ def set_volume(vol):
 
     subsys = platform.system()
     if subsys == "Darwin":
+        pct = int(interpolate(vol, -30, 0, 0, 100))
         subprocess.run(["osascript", "-e", "set volume output volume %d" % pct])
     elif subsys == "Linux":
         pct = int(interpolate(vol, -30, 0, 45, 100))
