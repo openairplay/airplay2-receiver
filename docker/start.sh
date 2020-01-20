@@ -11,9 +11,9 @@ fi
 sed "s/\(host-name=\).*/\1${AP2HOSTNAME}/g" -i /etc/avahi/avahi-daemon.conf
 
 # Debian services for mdns
-/etc/init.d/dbus start
+#/etc/init.d/dbus start
 /etc/init.d/avahi-daemon start
 
 # Start AirPlay 2 service
 cd /airplay2
-python3 ap2-receiver.py -m ${AP2HOSTNAME} -n ${AP2IFACE}
+exec python3 ap2-receiver.py -m ${AP2HOSTNAME} -n ${AP2IFACE}
