@@ -5,6 +5,7 @@ import struct
 import socket
 import argparse
 import tempfile
+import multiprocessing
 
 import pprint
 
@@ -17,6 +18,7 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
+from ap2.utils import get_volume, set_volume
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
 from ap2.connections.stream import Stream
@@ -50,16 +52,10 @@ FEATURES = 0x8030040780a00
 # FEATURES = 0x30040780a00
 # FEATURES = 0x8030040780a00 | (1 << 27)
 
-try: #en7 USB interface
-    ifen = ni.ifaddresses("en7")
-    IFEN = "en7"
-except ValueError:
-    ifen = ni.ifaddresses("en0")
-    IFEN = "en0"
 
-DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
-IPV4 = ifen[ni.AF_INET][0]["addr"]
-IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
+DEVICE_ID = None
+IPV4 = None
+IPV6 = None
 
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
@@ -115,7 +111,7 @@ def setup_global_structs(args):
         }
 
     second_stage_info = {
-        "initialVolume": -130,
+        "initialVolume": get_volume(),
         }
 
     sonos_one_setup = {
@@ -287,7 +283,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             for p in params:
                 if p == b"volume":
                     print("GET_PARAMETER: %s" % p)
-                    params_res[p] = b"-144"
+                    params_res[p] = str(get_volume()).encode()
                 else:
                     print("Ops GET_PARAMETER: %s" % p)
 
@@ -313,7 +309,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 params = body.splitlines()
                 for p in params:
                     pp = p.split(b":")
-                    if pp[0] in [b"volume", b"progress"]:
+                    if pp[0] == b"volume":
+                        print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
+                        set_volume(float(pp[1]))
+                    elif pp[0] == b"progress":
                         print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
                     else:
                         print("Ops SET_PARAMETER: %s" % p)
@@ -634,9 +633,23 @@ class AP2Server(socketserver.TCPServer):
 
 if __name__ == "__main__":
 
+    multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
+    parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
     args = parser.parse_args()
+
+    try:
+        IFEN = args.netiface
+        ifen = ni.ifaddresses(IFEN)
+    except Exception:
+        print("[!] Network interface not found")
+        exit(-1)
+
+
+    DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
+    IPV4 = ifen[ni.AF_INET][0]["addr"]
+    IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
     setup_global_structs(args)
 

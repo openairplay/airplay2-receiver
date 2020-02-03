@@ -5,7 +5,7 @@ import multiprocessing
 import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 
-from ..alac.libalac import AlacDecoder
+from ..alac.alac import AlacDecoder
 from ..utils import get_logger, get_free_port
 
 class RTP:
