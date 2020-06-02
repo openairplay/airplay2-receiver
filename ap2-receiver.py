@@ -141,7 +141,7 @@ def setup_global_structs(args):
             "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
             "flags": "0x4",
             # "name": "GINO", # random
-            # "model": "GIO", # random
+            "model": "Airplay2-Receiver",  # random
             # "manufacturer": "Pino", # random
             # "serialNumber": "01234xX321", # random
             "protovers": "1.1",
@@ -152,7 +152,7 @@ def setup_global_structs(args):
             "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gcgl": "0",
             # "vn": "65537",
-            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f",
+            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
             }
 
 class AP2Handler(http.server.BaseHTTPRequestHandler):
@@ -189,6 +189,21 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             print("GET %s Not implemented!" % self.path)
             self.send_error(404)
 
+    def do_OPTIONS(self):
+        print(self.headers)
+
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT") 
+        self.end_headers()
+
+    def do_FLUSHBUFFERED(self):
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+        
     def do_POST(self):
         print(self.headers)
         if self.path == "/command":

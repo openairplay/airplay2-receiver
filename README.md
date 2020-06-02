@@ -26,10 +26,6 @@ docker run -it --rm --device /dev/snd --net host invano/ap2-receiver
 
 To run the receiver please use Python 3 and do the following:
 
-* Clone https://github.com/macosforge/alac.git somewhere to ALAC
-* Copy `ap2/alac/apple_alac.cpp` and `ap2/alac/apple_alac.h` inside `ALAC/codec/` 
-* Apply `ap2/alac/alac.patch` to `ALAC`
-* build `ALAC` and copy the newly created `libalac.dylib` to `ap2/alac/`
 * Run the following commands
 
 ```zsh
@@ -47,12 +43,6 @@ python ap2-receiver.py -m myap2
 
 To run the receiver please use Python 3 and do the following:
 
-* Clone https://github.com/GiteKat/LibALAC.git somewhere to ALAC
-* Copy `ap2/alac/apple_alac.cpp` and `ap2/alac/apple_alac.h` inside `ALAC/codec/`
-* Open the solution with either VS2015 or VS2017
-* Add both apple_alac.cpp & apple_alac.h into the LibALAC C++ project
-* build the project (C++ project only is required) and copy the newly created dll to `ap2/alac/`
-* Rename it to libalac.dll if required
 * Run the following commands
 
 ```zsh
