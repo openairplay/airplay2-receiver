@@ -21,6 +21,11 @@ To run the receiver:
 docker run -it --rm --device /dev/snd --net host invano/ap2-receiver
 ```
 
+Default network device is wlan0, you can change this with AP2IFACE env variable:
+
+```zsh
+docker run -it --rm --device /dev/snd --env AP2IFACE=eth0 --net host invano/ap2-receiver
+```
 
 ## macOS Catalina
 
