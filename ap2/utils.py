@@ -20,6 +20,12 @@ def get_free_port():
     free_socket.close()
     return port
 
+def get_free_socket():
+    free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    free_socket.bind(('0.0.0.0', 0))
+    free_socket.listen(5)
+    return free_socket
+
 def interpolate(value, from_min, from_max, to_min, to_max):
     from_span = from_max - from_min
     to_span = to_max - to_min

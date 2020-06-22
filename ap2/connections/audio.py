@@ -8,7 +8,7 @@ import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 from av.audio.format import AudioFormat
 
-from ..utils import get_logger, get_free_port
+from ..utils import get_logger, get_free_port, get_free_socket
 
 
 class RTP:
@@ -69,7 +69,8 @@ class Audio:
                 and audio_format != Audio.AudioFormat.AAC_LC_44100_2.value:
             raise Exception("Unsupported format: %s", Audio.AudioFormat(audio_format)).name
         self.audio_format = audio_format
-        self.port = get_free_port()
+        self.socket = get_free_socket()
+        self.port = self.socket.getsockname()[1]
         self.session_key = session_key
 
     def init_audio_sink(self):
@@ -164,12 +165,12 @@ class AudioBuffered(Audio):
     def serve(self):
         self.logger = get_logger("audio", level="DEBUG")
         self.init_audio_sink()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        addr = ("0.0.0.0", self.port)
-        sock.bind(addr)
-        sock.listen(1)
+        #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #addr = ("0.0.0.0", self.port)
+        #sock.bind(addr)
+        #sock.listen(1)
 
-        conn, addr = sock.accept()
+        conn, addr = self.socket.accept()
         try:
             while True:
                 data_len = struct.unpack(">H", conn.recv(2, socket.MSG_WAITALL))[0]
@@ -182,4 +183,4 @@ class AudioBuffered(Audio):
             pass
         finally:
             conn.close()
-            sock.close()
+            self.socket.close()
