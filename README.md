@@ -3,8 +3,13 @@
 Very quick python implementation of AP2 protocol using **minimal
 multi-room** features without authentication/encryption.
 
-**This code is experimental. To use for debugging purposes only.** 
-
+**This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
+Next steps:
+ - (very soon) Implement RTP buffer (manage FLUSHBUFFERED) : play/pause/timeline
+ - Sender (branch-sender) - Implementation
+ - Implement RSA Authentication
+ - Raspbian package
+ - DACP/(+MRP?) Support
 ---
 
 ## Raspberry Pi 4
