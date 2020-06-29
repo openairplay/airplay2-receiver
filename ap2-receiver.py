@@ -18,6 +18,7 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
+from ap2.connections.audio import RTPBuffer
 from ap2.playfair import PlayFair
 from ap2.utils import get_volume, set_volume
 from ap2.pairing.hap import Hap, HAPSocket
@@ -53,7 +54,7 @@ FEATURES = 0x8030040780a00
 # FEATURES = 0x30040780a00
 # FEATURES = 0x8030040780a00 | (1 << 27)
 
-FEATURES = 0x1c340405fca00
+# FEATURES = 0x1c340405fca00
 
 DEVICE_ID = None
 IPV4 = None
@@ -199,35 +200,56 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_FLUSHBUFFERED(self):
+        print("FLUSHBUFFERED")
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        
+
+        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
+            content_len = int(self.headers["Content-Length"])
+            if content_len > 0:
+                body = self.rfile.read(content_len)
+
+                plist = readPlistFromString(body)
+                flush_from_seq = 0
+                if "flushFromSeq" in plist:
+                    flush_from_seq = plist["flushFromSeq"]
+                if "flushUntilSeq" in plist:
+                    flush_until_seq = plist["flushUntilSeq"]
+                    self.server.streams[0].audio_connection.send("flush_start-%i-%i" % (flush_from_seq, flush_until_seq))
+                self.pp.pprint(plist)
+
     def do_POST(self):
-        print(self.headers)
         if self.path == "/command":
+            print(self.headers)
             print("POST /command")
             self.handle_command()
         elif self.path == "/feedback":
-            print("POST /feedback")
+            # debug logs disabled for feedback
             self.handle_feedback()
         elif self.path == "/audioMode":
+            print(self.headers)
             print("POST /audioMode")
             self.handle_audiomode()
         elif self.path == "/auth-setup":
+            print(self.headers)
             print("POST /auth-setup")
             self.handle_auth_setup()
         elif self.path == "/fp-setup":
+            print(self.headers)
             print("POST /fp-setup")
             self.handle_fp_setup()
         elif self.path == "/fp-setup2":
+            print(self.headers)
             print("POST /fp-setup2")
             self.handle_auth_setup()
         elif self.path == "/pair-setup":
+            print(self.headers)
             print("POST /pair-setup")
             self.handle_pair_setup()
         elif self.path == "/pair-verify":
+            print(self.headers)
             print("POST /pair-verify")
             self.handle_pair_verify()
         else:
@@ -373,6 +395,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
+                if plist["rate"] == 1:
+                    self.server.streams[0].audio_connection.send("play")
+                if plist["rate"] == 0:
+                    self.server.streams[0].audio_connection.send("stop")
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -449,7 +475,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                # feedback logs are pretty much noise...
+                #self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -463,6 +490,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
+
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
