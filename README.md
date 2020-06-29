@@ -5,7 +5,10 @@ multi-room** features without authentication/encryption.
 
 **This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
 Next steps:
+
  - (very soon) Implement RTP buffer (manage FLUSHBUFFERED) : play/pause/timeline
+ - PTP (Precision Time Protocol)
+ - Remove all os specific code (Soft Volume management)
  - Sender (branch-sender) - Implementation
  - Implement RSA Authentication
  - Raspbian package
