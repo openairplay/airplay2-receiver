@@ -14,7 +14,7 @@ import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 from av.audio.format import AudioFormat
 
-from ..utils import get_logger, get_free_port, get_free_socket
+from ..utils import get_logger, get_free_tcp_socket, get_free_udp_socket
 
 
 class RTP:
@@ -200,8 +200,6 @@ class Audio:
                 and audio_format != Audio.AudioFormat.AAC_LC_44100_2.value:
             raise Exception("Unsupported format: %s", Audio.AudioFormat(audio_format)).name
         self.audio_format = audio_format
-        self.socket = get_free_socket()
-        self.port = self.socket.getsockname()[1]
         self.session_key = session_key
         self.rtp_buffer = RTPBuffer()
 
@@ -275,6 +273,11 @@ class Audio:
 
 class AudioRealtime(Audio):
 
+    def __init__(self, session_key, audio_format):
+        super(AudioRealtime, self).__init__(session_key, audio_format)
+        self.socket = get_free_udp_socket()
+        self.port = self.socket.getsockname()[1]
+
     def fini_audio_sink(self):
         self.sink.close()
         self.pa.terminate()
@@ -286,13 +289,10 @@ class AudioRealtime(Audio):
     def serve(self, playerconn):
         self.logger = get_logger("audio", level="DEBUG")
         self.init_audio_sink()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        addr = ("0.0.0.0", self.port)
-        sock.bind(addr)
 
         try:
             while True:
-                data, address = sock.recvfrom(4096)
+                data, address = self.socket.recvfrom(4096)
                 if data:
                     rtp = RTP_REALTIME(data)
                     self.handle(rtp)
@@ -301,11 +301,16 @@ class AudioRealtime(Audio):
         except KeyboardInterrupt:
             pass
         finally:
-            sock.close()
+            self.socket.close()
             self.fini_audio_sink()
 
 
 class AudioBuffered(Audio):
+    def __init__(self, session_key, audio_format):
+        super(AudioBuffered, self).__init__(session_key, audio_format)
+        self.socket = get_free_tcp_socket()
+        self.port = self.socket.getsockname()[1]
+
     # player moves readindex in buffer 
     def play(self, rtspconn, serverconn):
         playing = False
@@ -377,10 +382,6 @@ class AudioBuffered(Audio):
     def serve(self, playerconn):
         self.logger = get_logger("audio", level="DEBUG")
         self.init_audio_sink()
-        #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #addr = ("0.0.0.0", self.port)
-        #sock.bind(addr)
-        #sock.listen(1)
 
         conn, addr = self.socket.accept()
         searched_sequence = None
@@ -408,21 +409,23 @@ class AudioBuffered(Audio):
                             else:
                                 print("server: flush did not move write index")
 
-                data_len = struct.unpack(">H", conn.recv(2, socket.MSG_WAITALL))[0]
-                data = conn.recv(data_len - 2, socket.MSG_WAITALL)
+                message = conn.recv(2, socket.MSG_WAITALL)
+                if message:
+                    data_len = struct.unpack(">H", message)[0]
+                    data = conn.recv(data_len - 2, socket.MSG_WAITALL)
 
-                rtp = RTP_BUFFERED(data)
-                self.handle(rtp)
-                # do not write data if it is expired
-                if searched_sequence is None or rtp.sequence_no >= searched_sequence:
-                    used_index = self.rtp_buffer.add(rtp)
-                if searched_sequence is not None:
-                    print("server: Searching sequence %i - Current is %i" % (searched_sequence, rtp.sequence_no))
-                    if rtp.sequence_no >= searched_sequence:
-                        print("server: Requested sequence %i - Receiving sequence %i" % (searched_sequence, rtp.sequence_no))
-                        # as soon as we detect sequence, inform player
-                        playerconn.send("data_ready_response-%i-%i" % (searched_sequence, used_index))
-                        searched_sequence = None
+                    rtp = RTP_BUFFERED(data)
+                    self.handle(rtp)
+                    # do not write data if it is expired
+                    if searched_sequence is None or rtp.sequence_no >= searched_sequence:
+                        used_index = self.rtp_buffer.add(rtp)
+                    if searched_sequence is not None:
+                        print("server: Searching sequence %i - Current is %i" % (searched_sequence, rtp.sequence_no))
+                        if rtp.sequence_no >= searched_sequence:
+                            print("server: Requested sequence %i - Receiving sequence %i" % (searched_sequence, rtp.sequence_no))
+                            # as soon as we detect sequence, inform player
+                            playerconn.send("data_ready_response-%i-%i" % (searched_sequence, used_index))
+                            searched_sequence = None
 
         except KeyboardInterrupt:
             pass
