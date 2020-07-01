@@ -4,9 +4,11 @@ Very quick python implementation of AP2 protocol using **minimal
 multi-room** features without authentication/encryption.
 
 **This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
-Next steps:
 
- - (very soon) Implement RTP buffer (manage FLUSHBUFFERED) : play/pause/timeline
+Latest additions:
+ - Implement RTP buffer (manage FLUSHBUFFERED) : play/pause/timeline/playlist
+
+Next steps:
  - PTP (Precision Time Protocol)
  - Remove all os specific code (Soft Volume management)
  - Sender (branch-sender) - Implementation
