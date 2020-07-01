@@ -16,8 +16,12 @@ class Event:
 
         conn, addr = sock.accept()
         self.logger.debug("Connection open from %s:%d" % addr)
+        event_file = open("./events.bin","wb")
         try:
-            data = conn.recv(4096)
+            while True:
+                data = conn.recv(1)
+                if data:
+                    event_file.write(data)
         except KeyboardInterrupt:
             pass
         finally:
