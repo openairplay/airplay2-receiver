@@ -1,8 +1,16 @@
 # Experimental
 
 Very quick python implementation of AP2 protocol using **minimal
-multi-room** features without authentication/encryption.
+multi-room** features. For now it implements:
+- HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305)
+- FairPlay authentication
+- Receiving of both REALTIME and BUFFERED Airplay2 audio streams
+- Airplay2 Service publication
+- Decoding of ALAC/44100/2 or AAC/44100/2
 
+For now it does not implement:
+ - MFi Authentication (required by iTunes/Windows)
+ 
 **This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
 
 Latest additions:
