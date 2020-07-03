@@ -113,8 +113,12 @@ def setup_global_structs(args):
         # 'statusFlags': 0x404 # Sonos One
         }
 
+    if DISABLE_VM:
+        volume = 0
+    else: 
+        volume = get_volume()
     second_stage_info = {
-        "initialVolume": get_volume(),
+        "initialVolume": volume,
         }
 
     sonos_one_setup = {
@@ -322,11 +326,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             for p in params:
                 if p == b"volume":
                     print("GET_PARAMETER: %s" % p)
-                    params_res[p] = str(get_volume()).encode()
+                    if not DISABLE_VM:
+                        params_res[p] = str(get_volume()).encode()
+                    else:
+                        print("Volume Management is disabled")
                 else:
                     print("Ops GET_PARAMETER: %s" % p)
-
-        res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
+        if DISABLE_VM:
+            res = b"volume: 0"
+        else:
+            res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
         self.send_response(200)
         self.send_header("Content-Length", len(res))
         self.send_header("Content-Type", HTTP_CT_PARAM)
@@ -350,7 +359,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     pp = p.split(b":")
                     if pp[0] == b"volume":
                         print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
-                        set_volume(float(pp[1]))
+                        if not DISABLE_VM:
+                            set_volume(float(pp[1]))
+                        else:
+                            print("Volume Management is disabled")
                     elif pp[0] == b"progress":
                         print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
                     else:
@@ -687,11 +699,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
+    parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
+
     args = parser.parse_args()
 
     try:
         IFEN = args.netiface
         ifen = ni.ifaddresses(IFEN)
+        DISABLE_VM = args.no_volume_management
     except Exception:
         print("[!] Network interface not found")
         exit(-1)
