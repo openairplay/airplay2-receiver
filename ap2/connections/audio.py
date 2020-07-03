@@ -4,9 +4,6 @@ import struct
 import multiprocessing
 import enum
 import threading
-from array import array
-import time
-from bisect import bisect_left
 
 import av
 import numpy
@@ -81,7 +78,7 @@ class RTPBuffer:
     def add(self, rtp_data):
         #print("write  - %i %i" % (self.read_index, self.write_index))
         if self.write_index % 1000 == 0:
-            print("write - buffer full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index, rtp_data.sequence_no))
+            print("buffer: writing - full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index, rtp_data.sequence_no))
 
         used_index = self.write_index
         self.buffer_array[self.write_index] = rtp_data
@@ -92,7 +89,7 @@ class RTPBuffer:
         else:
             if self.increment_index(self.write_index) == self.read_index:
                 # buffer overflow, we "push" the read index
-                print("Buffer overrrun")
+                print("buffer: overrrun")
                 self.read_index = self.increment_index(self.read_index)
         self.write_index = self.increment_index(self.write_index)
 
@@ -101,18 +98,22 @@ class RTPBuffer:
     def get(self):
         return self.buffer_array[self.read_index]
 
+    def can_read(self):
+        return self.read_index != -1
+        
     def next(self):
         # print("read   - %i %i" % (self.read_index, self.write_index))
         if self.read_index == -1:
+            raise Exception("buffer: read is not possible - empty buffer")
             return None
         else:
             buffered_object = self.buffer_array[self.read_index]
             if self.read_index % 1000 == 0:
-                print("read  - buffer full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index,buffered_object.sequence_no))
+                print("buffer: reading - full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index,buffered_object.sequence_no))
 
             if self.increment_index(self.read_index) == self.write_index:
                 # buffer underrun, nothing we can do
-                print("Buffer underrun")
+                print("buffer: underrun")
                 self.read_index = -1
             else:
                 self.read_index = self.increment_index(self.read_index)
@@ -135,23 +136,24 @@ class RTPBuffer:
             return self.write_index, self.read_index
 
     def find_seq(self, seq):
-        # buffer_bounds = self.get_bounds()
-        # active_seq_array = self.buffer_array_seqs[buffer_bounds[0]:buffer_bounds[1]]
-        # index = bisect_left(active_seq_array, seq)
-        # if index != len(active_seq_array) and active_seq_array[index] == seq:
-        #     return index
-        # return None
-        for i in range(self.BUFFER_SIZE - 1):
-            if self.buffer_array[i] and self.buffer_array[i].sequence_no == seq:
-                return i
+        start_index = self.read_index
+        end_index = self.write_index
+
+        if start_index == -1:
+            return
+
+        while True:
+            if start_index == end_index:
+                return
+            if self.buffer_array[start_index].sequence_no == seq:
+                return start_index
+            else:
+                start_index = self.increment_index(start_index)
 
     # Flush - Must be called from reader (player)
-    def flush_read(self, new_index, seq_from, seq_until):
-        if seq_from < self.buffer_array[self.read_index].sequence_no < seq_until:
-            self.read_index = new_index
-            return True
-        else:
-            return False
+    def flush_read(self):
+            self.read_index = -1
+
 
     # Flush - Must be called from writer (server)
     def flush_write(self, index_from):
@@ -259,13 +261,11 @@ class Audio:
     @classmethod
     def spawn(cls, session_key, audio_format):
         audio = cls(session_key, audio_format)
-        #p = multiprocessing.Process(target=audio.serve)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         # This one is between player (read data) and server (write data)
         parent_writer_connection, writer_connection = multiprocessing.Pipe()
         p = threading.Thread(target=audio.serve, args=(writer_connection,))
-        m = multiprocessing.Manager()
         play = threading.Thread(target=audio.play, args=(parent_reader_connection,parent_writer_connection))
         p.start()
         play.start()
@@ -314,65 +314,43 @@ class AudioBuffered(Audio):
     # player moves readindex in buffer 
     def play(self, rtspconn, serverconn):
         playing = False
-        pending_flush_until_seq = None
-        pending_flush_from_index = None
+        data_ready = False
         while True:
             if not playing:
                 timeout = None
             else:
-                timeout = 0.01
+                timeout = 0
 
-            if pending_flush_until_seq is not None:
-                # Unfortunately, we cannot poll both serverconn and rtspconn at once
-                if serverconn.poll(2):
-                    message = serverconn.recv()
-                    if str.startswith(message, "data_ready_response"):
-                        print("player: received message %s" % message)
-                        message, flush_until_seq, flush_until_index = str.split(message, "-")
-                        flush_until_index = int(flush_until_index)
-                        flush_until_seq = int(flush_until_seq)
-                        # Check the message is matching our last flush request
-                        if flush_until_seq == pending_flush_until_seq:
-                            if self.rtp_buffer.flush_read(flush_until_index, pending_flush_from_seq, flush_until_seq):
-                                print("player: successfully flushed from index % i until index %i" % (pending_flush_from_index, flush_until_index))
-                            else:
-                                print("player: flush did not move read index")
+            if self.rtp_buffer.can_read():
+                data_ready = True
 
-                            pending_flush_until_seq = None
-
-                        else:
-                            print("player: ignore sequence search response - sequence mismatch")
-                else:
-                    print("player: pending sequence search did not respond in time")
-                    pending_flush_until_seq = None
+            if serverconn.poll():
+                message = serverconn.recv()
+                if message == "data_ready":
+                    data_ready = True
 
             if rtspconn.poll(timeout):
                 message = rtspconn.recv()
                 if message == "stop":
                     playing = False
+                    data_ready = False
                 if message == "play":
                     playing = True
 
-                if str.startswith(message, "flush_start"):
+                if str.startswith(message, "flush_from_until_seq"):
                     pending_flush_from_seq, pending_flush_until_seq = str.split(message, "-")[-2:]
                     pending_flush_from_seq = int(pending_flush_from_seq)
                     pending_flush_until_seq = int(pending_flush_until_seq)
+
                     print("player: request flush received from-until %i-%i" % (pending_flush_from_seq, pending_flush_until_seq))
-                    # packet may not have been written yet, so only server is/will be aware
-                    # we request the server to inform, move of read index will be done by player thread itself
-                    serverconn.send("data_ready_request-%i" % pending_flush_until_seq)
-                    if pending_flush_from_seq != 0:
-                        # flush-from may move write index, and is managed by server thread -> request it to flush
-                        current_time = time.time()
-                        pending_flush_from_index = self.rtp_buffer.find_seq(pending_flush_from_seq)
-                        if pending_flush_from_index:
-                            print("player: requested from sequence %i in %04.2f seconds" % (pending_flush_from_seq, time.time() - current_time))
-                            serverconn.send("flush_from_index-%i" % pending_flush_from_index)
-                        else:
-                            raise Exception("player: flush failed - sequence %i not found" % pending_flush_from_seq)
-                    else:
-                        pending_flush_from_index = 0
-            if playing and pending_flush_until_seq is None:
+                    if pending_flush_from_seq == 0:
+                        # only until is provided -> flush all the buffer
+                        print("player: flush all buffer")
+                        self.rtp_buffer.flush_read()
+                    print("player: relay message to server to flush from-until sequence %i-%i" % (pending_flush_from_seq, pending_flush_until_seq))
+                    serverconn.send(message)
+
+            if playing and data_ready:
                 rtp = self.rtp_buffer.next()
                 if rtp:
                     audio = self.process(rtp)
@@ -384,25 +362,17 @@ class AudioBuffered(Audio):
         self.init_audio_sink()
 
         conn, addr = self.socket.accept()
-        searched_sequence = None
+        seq_to_overtake = None
         try:
             while True:
                 while playerconn.poll():
                     message = playerconn.recv()
-                    if str.startswith(message, "data_ready_request"):
-                        searched_sequence = int(str.split(message, "-")[1])
-                        current_time = time.time()
-                        searched_index = self.rtp_buffer.find_seq(searched_sequence)
-                        if searched_index:
-                            print("server: requested sequence %i - found sequence %i in %04.2f seconds" % (searched_sequence, searched_sequence, time.time() - current_time))
-                            playerconn.send("data_ready_response-%i-%i" % (searched_sequence, searched_index))
-                            searched_sequence = None
-                        else:
-                            print("server: requested sequence %i - nothing found - took %04.2f seconds" % (searched_sequence, time.time() - current_time))
-
-                    if str.startswith(message, "flush_from_index"):
-                        print("server: flush-from request received: %s" % message)
-                        from_index = int(str.split(message, "-")[1])
+                    if str.startswith(message, "flush_from_until_seq"):
+                        print("server: flush request received: %s" % message)
+                        pending_flush_from_seq, pending_flush_until_seq = str.split(message, "-")[-2:]
+                        pending_flush_from_seq = int(pending_flush_from_seq)
+                        seq_to_overtake = int(pending_flush_until_seq)
+                        from_index = self.rtp_buffer.find_seq(pending_flush_from_seq)
                         if from_index:
                             if self.rtp_buffer.flush_write(from_index):
                                 print("server: successfully flushed - write index moved to %i" % from_index)
@@ -417,15 +387,15 @@ class AudioBuffered(Audio):
                     rtp = RTP_BUFFERED(data)
                     self.handle(rtp)
                     # do not write data if it is expired
-                    if searched_sequence is None or rtp.sequence_no >= searched_sequence:
-                        used_index = self.rtp_buffer.add(rtp)
-                    if searched_sequence is not None:
-                        print("server: Searching sequence %i - Current is %i" % (searched_sequence, rtp.sequence_no))
-                        if rtp.sequence_no >= searched_sequence:
-                            print("server: Requested sequence %i - Receiving sequence %i" % (searched_sequence, rtp.sequence_no))
-                            # as soon as we detect sequence, inform player
-                            playerconn.send("data_ready_response-%i-%i" % (searched_sequence, used_index))
-                            searched_sequence = None
+                    if seq_to_overtake is None or rtp.sequence_no >= seq_to_overtake:
+                        self.rtp_buffer.add(rtp)
+                    if seq_to_overtake is not None:
+                        print("server: searching sequence %i - current is %i" % (seq_to_overtake, rtp.sequence_no))
+                        if rtp.sequence_no >= seq_to_overtake:
+                            print("server: requested sequence to overtake %i - receiving sequence %i" % (seq_to_overtake, rtp.sequence_no))
+                            # as soon as we overtake seq_to_overtake sequence, let's inform the player
+                            playerconn.send("data_ready")
+                            seq_to_overtake = None
 
         except KeyboardInterrupt:
             pass

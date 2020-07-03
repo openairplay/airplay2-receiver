@@ -217,7 +217,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     flush_from_seq = plist["flushFromSeq"]
                 if "flushUntilSeq" in plist:
                     flush_until_seq = plist["flushUntilSeq"]
-                    self.server.streams[0].audio_connection.send("flush_start-%i-%i" % (flush_from_seq, flush_until_seq))
+                    self.server.streams[0].audio_connection.send("flush_from_until_seq-%i-%i" % (flush_from_seq, flush_until_seq))
                 self.pp.pprint(plist)
 
     def do_POST(self):
