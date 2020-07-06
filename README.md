@@ -3,13 +3,14 @@
 Very quick python implementation of AP2 protocol using **minimal
 multi-room** features. For now it implements:
 - HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305)
-- FairPlay authentication
+- FairPlay (v3) authentication
 - Receiving of both REALTIME and BUFFERED Airplay2 audio streams
 - Airplay2 Service publication
 - Decoding of ALAC/44100/2 or AAC/44100/2
 
 For now it does not implement:
- - MFi Authentication (required by iTunes/Windows)
+ - MFi Authentication / FairPlay v2 (one of them is required by iTunes/Windows)
+ - Audio Sync
  
 **This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
 
@@ -23,6 +24,7 @@ Next steps:
  - Implement RSA Authentication
  - Raspbian package
  - DACP/(+MRP?) Support
+ - FairPlay v2 Support
 ---
 
 ## Raspberry Pi 4
