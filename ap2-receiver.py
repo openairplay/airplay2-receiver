@@ -408,9 +408,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 if plist["rate"] == 1:
-                    self.server.streams[0].audio_connection.send("play")
+                    self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
                 if plist["rate"] == 0:
-                    self.server.streams[0].audio_connection.send("stop")
+                    self.server.streams[0].audio_connection.send("pause")
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
