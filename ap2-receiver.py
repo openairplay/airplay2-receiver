@@ -431,6 +431,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     stream = self.server.streams[stream_id]
                     stream.teardown()
                     del self.server.streams[stream_id]
+                else:
+                    for stream in self.server.streams:
+                        stream.teardown()
+                    self.server.streams.clear()
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
