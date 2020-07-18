@@ -258,18 +258,24 @@ class Audio:
             frame = self.resampler.resample(frame)
             return frame.planes[0].to_bytes()
 
+    def run(self, parent_reader_connection):
+        # This pipe is between player (read data) and server (write data)
+        parent_writer_connection, writer_connection = multiprocessing.Pipe()
+        server_thread = threading.Thread(target=self.serve, args=(writer_connection,))
+        player_thread = threading.Thread(target=self.play, args=(parent_reader_connection,parent_writer_connection))
+
+        server_thread.start()
+        player_thread.start()
+
     @classmethod
     def spawn(cls, session_key, audio_format):
         audio = cls(session_key, audio_format)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
-        # This one is between player (read data) and server (write data)
-        parent_writer_connection, writer_connection = multiprocessing.Pipe()
-        p = threading.Thread(target=audio.serve, args=(writer_connection,))
-        play = threading.Thread(target=audio.play, args=(parent_reader_connection,parent_writer_connection))
-        p.start()
-        play.start()
-        return audio.port, p, audio.audio_connection
+        mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
+        mainprocess.start()
+
+        return audio.port, mainprocess, audio.audio_connection
 
 class AudioRealtime(Audio):
 
