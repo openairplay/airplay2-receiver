@@ -54,7 +54,7 @@ FEATURES = 0x8030040780a00
 # FEATURES = 0x30040780a00
 # FEATURES = 0x8030040780a00 | (1 << 27)
 
-# FEATURES = 0x1c340405fca00
+FEATURES = 0x1c340405fca00
 
 DEVICE_ID = None
 IPV4 = None
@@ -704,6 +704,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
     parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
+    parser.add_argument("-f", "--features", required=False, help="Features")
 
     args = parser.parse_args()
 
@@ -711,6 +712,12 @@ if __name__ == "__main__":
         IFEN = args.netiface
         ifen = ni.ifaddresses(IFEN)
         DISABLE_VM = args.no_volume_management
+        if args.features:
+            try:
+                FEATURES = int(args.features, 16)
+            except Exception:
+                print("[!] Error with feature arg - hex format required")
+                exit(-1)
     except Exception:
         print("[!] Network interface not found")
         exit(-1)
