@@ -8,3 +8,5 @@ hkdf
 pynacl
 cryptography
 requests
+av
+numpy

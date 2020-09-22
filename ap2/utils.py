@@ -20,6 +20,17 @@ def get_free_port():
     free_socket.close()
     return port
 
+def get_free_tcp_socket():
+    free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    free_socket.bind(('0.0.0.0', 0))
+    free_socket.listen(5)
+    return free_socket
+
+def get_free_udp_socket():
+    free_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    free_socket.bind(('0.0.0.0', 0))
+    return free_socket
+
 def interpolate(value, from_min, from_max, to_min, to_max):
     from_span = from_max - from_min
     to_span = to_max - to_min
@@ -42,6 +53,9 @@ def get_volume():
                 pct = 45
         else: pct = 50
         vol = interpolate(pct, 45, 100, -30, 0)
+    elif subsys == "Windows":
+        # Volume get is not managed under windows, let's set to a default volume
+        vol = 50;
     if vol == -30:
         return -144
     return vol

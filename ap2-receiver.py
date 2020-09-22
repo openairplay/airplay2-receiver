@@ -18,6 +18,8 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
+from ap2.connections.audio import RTPBuffer
+from ap2.playfair import PlayFair
 from ap2.utils import get_volume, set_volume
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
@@ -52,6 +54,7 @@ FEATURES = 0x8030040780a00
 # FEATURES = 0x30040780a00
 # FEATURES = 0x8030040780a00 | (1 << 27)
 
+FEATURES = 0x1c340405fca00
 
 DEVICE_ID = None
 IPV4 = None
@@ -110,8 +113,12 @@ def setup_global_structs(args):
         # 'statusFlags': 0x404 # Sonos One
         }
 
+    if DISABLE_VM:
+        volume = 0
+    else: 
+        volume = get_volume()
     second_stage_info = {
-        "initialVolume": get_volume(),
+        "initialVolume": volume,
         }
 
     sonos_one_setup = {
@@ -139,7 +146,7 @@ def setup_global_structs(args):
             "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
             "flags": "0x4",
             # "name": "GINO", # random
-            # "model": "GIO", # random
+            "model": "Airplay2-Receiver",  # random
             # "manufacturer": "Pino", # random
             # "serialNumber": "01234xX321", # random
             "protovers": "1.1",
@@ -150,7 +157,7 @@ def setup_global_structs(args):
             "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
             "gcgl": "0",
             # "vn": "65537",
-            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f",
+            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
             }
 
 class AP2Handler(http.server.BaseHTTPRequestHandler):
@@ -187,30 +194,66 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             print("GET %s Not implemented!" % self.path)
             self.send_error(404)
 
-    def do_POST(self):
+    def do_OPTIONS(self):
         print(self.headers)
+
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT") 
+        self.end_headers()
+
+    def do_FLUSHBUFFERED(self):
+        print("FLUSHBUFFERED")
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
+            content_len = int(self.headers["Content-Length"])
+            if content_len > 0:
+                body = self.rfile.read(content_len)
+
+                plist = readPlistFromString(body)
+                flush_from_seq = 0
+                if "flushFromSeq" in plist:
+                    flush_from_seq = plist["flushFromSeq"]
+                if "flushUntilSeq" in plist:
+                    flush_until_seq = plist["flushUntilSeq"]
+                    self.server.streams[0].audio_connection.send("flush_from_until_seq-%i-%i" % (flush_from_seq, flush_until_seq))
+                self.pp.pprint(plist)
+
+    def do_POST(self):
         if self.path == "/command":
+            print(self.headers)
             print("POST /command")
             self.handle_command()
         elif self.path == "/feedback":
-            print("POST /feedback")
+            # debug logs disabled for feedback
             self.handle_feedback()
         elif self.path == "/audioMode":
+            print(self.headers)
             print("POST /audioMode")
             self.handle_audiomode()
         elif self.path == "/auth-setup":
+            print(self.headers)
             print("POST /auth-setup")
             self.handle_auth_setup()
         elif self.path == "/fp-setup":
+            print(self.headers)
             print("POST /fp-setup")
             self.handle_fp_setup()
         elif self.path == "/fp-setup2":
+            print(self.headers)
             print("POST /fp-setup2")
             self.handle_auth_setup()
         elif self.path == "/pair-setup":
+            print(self.headers)
             print("POST /pair-setup")
             self.handle_pair_setup()
         elif self.path == "/pair-verify":
+            print(self.headers)
             print("POST /pair-verify")
             self.handle_pair_verify()
         else:
@@ -283,11 +326,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             for p in params:
                 if p == b"volume":
                     print("GET_PARAMETER: %s" % p)
-                    params_res[p] = str(get_volume()).encode()
+                    if not DISABLE_VM:
+                        params_res[p] = str(get_volume()).encode()
+                    else:
+                        print("Volume Management is disabled")
                 else:
                     print("Ops GET_PARAMETER: %s" % p)
-
-        res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
+        if DISABLE_VM:
+            res = b"volume: 0"
+        else:
+            res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
         self.send_response(200)
         self.send_header("Content-Length", len(res))
         self.send_header("Content-Type", HTTP_CT_PARAM)
@@ -311,7 +359,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     pp = p.split(b":")
                     if pp[0] == b"volume":
                         print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
-                        set_volume(float(pp[1]))
+                        if not DISABLE_VM:
+                            set_volume(float(pp[1]))
+                        else:
+                            print("Volume Management is disabled")
                     elif pp[0] == b"progress":
                         print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
                     else:
@@ -356,6 +407,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
+                if plist["rate"] == 1:
+                    self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
+                if plist["rate"] == 0:
+                    self.server.streams[0].audio_connection.send("pause")
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -376,6 +431,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     stream = self.server.streams[stream_id]
                     stream.teardown()
                     del self.server.streams[stream_id]
+                else:
+                    for stream in self.server.streams:
+                        stream.teardown()
+                    self.server.streams.clear()
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -432,7 +491,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                # feedback logs are pretty much noise...
+                #self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -446,6 +506,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 self.pp.pprint(plist)
+
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -466,12 +527,17 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
+            pf = PlayFair()
+            pf_info = PlayFair.fairplay_s()
+            response = pf.fairplay_setup(pf_info, body)
             hexdump(body)
 
         self.send_response(200)
+        self.send_header("Content-Length", len(response))
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+        self.wfile.write(response)
 
     def handle_pair_setup(self):
         content_len = int(self.headers["Content-Length"])
@@ -637,11 +703,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
+    parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
+    parser.add_argument("-f", "--features", required=False, help="Features")
+
     args = parser.parse_args()
 
     try:
         IFEN = args.netiface
         ifen = ni.ifaddresses(IFEN)
+        DISABLE_VM = args.no_volume_management
+        if args.features:
+            try:
+                FEATURES = int(args.features, 16)
+            except Exception:
+                print("[!] Error with feature arg - hex format required")
+                exit(-1)
     except Exception:
         print("[!] Network interface not found")
         exit(-1)
