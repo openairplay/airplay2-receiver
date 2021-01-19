@@ -333,7 +333,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     print("Ops GET_PARAMETER: %s" % p)
         if DISABLE_VM:
-            res = b"volume: 0"
+            res = b"volume: 0" + b"\r\n"
         else:
             res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
         self.send_response(200)
@@ -342,6 +342,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+        hexdump(res);
         self.wfile.write(res)
 
     def do_SET_PARAMETER(self):
