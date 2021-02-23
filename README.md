@@ -41,7 +41,7 @@ pip install -r requirements.txt
 pip install --global-option=build_ext --global-option="-I/usr/local/Cellar/portaudio/19.6.0/include" --global-option="-L/usr/local/Cellar/portaudio/19.6.0/lib" pyaudio
 
 
-python ap2-receiver.py -m myap2
+python ap2-receiver.py -m myap2 --netiface=en0
 ```
 
 * the AirPlay 2 receiver is announced as **myap2**.
