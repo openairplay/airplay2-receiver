@@ -441,6 +441,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+        
+        # Erase the hap() instance, otherwise reconnects fail
+        self.server.hap = None
+
+        # terminate the forked event_proc, otherwise a zombie process consumes 100% cpu
+        self.event_proc.terminate()
 
     def do_SETPEERS(self):
         print("SETPEERS %s" % self.path)
