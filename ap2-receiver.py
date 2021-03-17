@@ -378,7 +378,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
                 self.rfile.read(content_len)
-                print("Now plaing DAAP info. (need a daap parser here)")
+                print("Now playing DAAP info. (need a daap parser here)")
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -729,10 +729,15 @@ if __name__ == "__main__":
         print("[!] Network interface not found")
         exit(-1)
 
-
-    DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
-    IPV4 = ifen[ni.AF_INET][0]["addr"]
-    IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
+    DEVICE_ID = None
+    IPV4 = None
+    IPV6 = None
+    if ifen[ni.AF_LINK]:
+        DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
+    if ifen[ni.AF_INET]:
+        IPV4 = ifen[ni.AF_INET][0]["addr"]
+    if ifen[ni.AF_INET6]:
+        IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
     setup_global_structs(args)
 
@@ -742,13 +747,18 @@ if __name__ == "__main__":
     print()
 
     mdns = register_mdns(args.mdns)
-    print("Starting RSTP server, press Ctrl-C to exit...")
+    print("Starting RTSP server, press Ctrl-C to exit...")
     try:
         PORT = 7000
+        if IPV6 and not IPV4:
+            with AP2Server((IPV6, PORT), AP2Handler) as httpd:
+                print("serving at port", PORT)
+                httpd.serve_forever()
+        else: #i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
+            with AP2Server((IPV4, PORT), AP2Handler) as httpd:
+                print("serving at port", PORT)
+                httpd.serve_forever()
 
-        with AP2Server(("0.0.0.0", PORT), AP2Handler) as httpd:
-            print("serving at port", PORT)
-            httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
