@@ -6,7 +6,9 @@ multi-room** features. For now it implements:
 - FairPlay (v3) authentication
 - Receiving of both REALTIME and BUFFERED Airplay2 audio streams
 - Airplay2 Service publication
-- Decoding of ALAC/44100/2 or AAC/44100/2
+- Decoding of all Airplay2 supported CODECs: ALAC, AAC, OPUS, PCM.
+ Ref: [here](https://emanuelecozzi.net/docs/airplay2/audio/) and 
+      [here](https://emanuelecozzi.net/docs/airplay2/rtsp/#setup)
 
 For now it does not implement:
  - MFi Authentication / FairPlay v2 (one of them is required by iTunes/Windows)

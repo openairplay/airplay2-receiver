@@ -197,45 +197,116 @@ class Audio:
         AAC_ELD_44100_1 = 1 << 31
         AAC_ELD_48000_1 = 1 << 32
 
+    @staticmethod
+    def set_audio_params(self, audio_format):
+        #defaults
+        self.sample_rate = 44100
+        self.sample_size = 16
+        self.channel_count = 2
+        self.af = af = str(Audio.AudioFormat(audio_format))
+
+        if  '8000'  in af:
+            self.sample_rate = 8000
+        elif'16000' in af:
+            self.sample_rate = 16000
+        elif'24000' in af:
+            self.sample_rate = 24000
+        elif'32000' in af:
+            self.sample_rate = 32000
+        elif'44100' in af:
+            self.sample_rate = 44100
+        elif'48000' in af:
+            self.sample_rate = 48000
+        else: #default
+            self.sample_rate = 44100
+
+        if  '_16'   in af:
+            self.sample_size = 16
+        elif'_24'   in af:
+            self.sample_size = 24
+        else: #default
+            self.sample_size = 16
+
+        if  af.endswith('_1'):
+            self.channel_count = 1
+        else:
+            self.channel_count = 2
+
+        print("Negotiated audio format: ", Audio.AudioFormat(audio_format))
+    #
+
+
     def __init__(self, session_key, audio_format):
-        if audio_format != Audio.AudioFormat.ALAC_44100_16_2.value \
-                and audio_format != Audio.AudioFormat.AAC_LC_44100_2.value:
-            raise Exception("Unsupported format: %s", Audio.AudioFormat(audio_format)).name
         self.audio_format = audio_format
         self.session_key = session_key
         self.rtp_buffer = RTPBuffer()
+        self.set_audio_params(self, audio_format)
+
+    @staticmethod
+    def set_alac_extradata(self, sample_rate, sample_size, channel_count):
+        extradata = bytes()  #a 36-byte QuickTime atom passed through as extradata
+        extradata += (36).to_bytes(4, byteorder='big') #32 bits  atom size
+        extradata += ('alac').encode() #32 bits  tag ('alac')
+        extradata += (0).to_bytes(4, byteorder='big')  #32 bits  tag version (0)
+        extradata += (352).to_bytes(4, byteorder='big') #32 bits  samples per frame
+        extradata += (0).to_bytes(1, byteorder='big')  # 8 bits  compatible version   (0)
+        extradata += (sample_size).to_bytes(1, byteorder='big') # 8 bits  sample size
+        extradata += (40).to_bytes(1, byteorder='big')  # 8 bits  history mult         (40)
+        extradata += (10).to_bytes(1, byteorder='big') # 8 bits  initial history      (10)
+        extradata += (14).to_bytes(1, byteorder='big') # 8 bits  rice param limit     (14)
+        extradata += (channel_count).to_bytes(1, byteorder='big')  # 8 bits  channels
+        extradata += (255).to_bytes(2, byteorder='big') # 16 bits  maxRun               (255)
+        extradata += (0).to_bytes(4, byteorder='big') # 32 bits  max coded frame size (0 means unknown)
+        extradata += (0).to_bytes(4, byteorder='big') # 32 bits  average bitrate      (0 means unknown)
+        extradata += (sample_rate).to_bytes(4, byteorder='big')  # 32 bits  samplerate
+        return extradata
 
     def init_audio_sink(self):
         self.pa = pyaudio.PyAudio()
         self.sink = self.pa.open(format=self.pa.get_format_from_width(2),
-                                 channels=2,
-                                 rate=44100,
+                                 channels=self.channel_count,
+                                 rate=self.sample_rate,
                                  output=True)
-        codec = None
+        #nice Python3 crash if we don't check self.sink is null. Not harmful, but should check.
+        if not self.sink:
+            exit()
+        # codec = None
         extradata = None
         if self.audio_format == Audio.AudioFormat.ALAC_44100_16_2.value:
-            extradata = bytes([
-                # Offset 0x00000000 to 0x00000035
-                0x00, 0x00, 0x00, 0x24, 0x61, 0x6c, 0x61, 0x63, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x01, 0x60, 0x00, 0x10, 0x28, 0x0a, 0x0e, 0x02, 0x00, 0xff,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xac, 0x44
-            ])
-            codec = av.codec.Codec('alac', 'r')
-        elif self.audio_format == Audio.AudioFormat.AAC_LC_44100_2.value:
-            codec = av.codec.Codec('aac', 'r')
+            extradata = self.set_alac_extradata(self, 44100, 16, 2 )
+        elif self.audio_format == Audio.AudioFormat.ALAC_44100_24_2.value:
+            extradata = self.set_alac_extradata(self, 44100, 24, 2 )
+        elif self.audio_format == Audio.AudioFormat.ALAC_48000_16_2.value:
+            extradata = self.set_alac_extradata(self, 48000, 16, 2 )
+        elif self.audio_format == Audio.AudioFormat.ALAC_48000_24_2.value:
+            extradata = self.set_alac_extradata(self, 48000, 24, 2 )
 
-        if codec is not None:
-            self.codecContext = av.codec.CodecContext.create(codec)
-            self.codecContext.sample_rate = 44100
-            self.codecContext.channels = 2
-            self.codecContext.format = AudioFormat('s16p')
+
+        if  'ALAC'  in self.af:
+            self.codec = av.codec.Codec('alac', 'r')
+        elif'AAC'   in self.af:
+            self.codec = av.codec.Codec('aac', 'r')
+        elif'OPUS'   in self.af:
+            self.codec = av.codec.Codec('opus', 'r')
+        #PCM - not sure which. Easy to fix. 
+        elif'PCM' and '_16_' in self.af:
+            self.codec = av.codec.Codec('pcm_s16be_planar', 'r')
+        elif'PCM' and '_24_' in self.af:
+            self.codec = av.codec.Codec('pcm_s24be', 'r')
+
+
+        if self.codec is not None:
+            self.codecContext = av.codec.CodecContext.create(self.codec)
+            self.codecContext.sample_rate = self.sample_rate
+            self.codecContext.channels = self.channel_count
+            self.codecContext.format = AudioFormat('s' + str(self.sample_size) + 'p')
         if extradata is not None:
             self.codecContext.extradata = extradata
 
         self.resampler = av.AudioResampler(
-            format=av.AudioFormat('s16').packed,
+            format=av.AudioFormat('s' + str(self.sample_size) ).packed,
             layout='stereo',
-            rate=44100,
+            rate=self.sample_rate,
         )
 
     def decrypt(self, rtp):
@@ -289,7 +360,7 @@ class AudioRealtime(Audio):
         self.pa.terminate()
 
     def play(self, rtspconn, serverconn):
-        # for now RT do no use RTPBuffer at all, we don't use this method
+        # for now RealTime does not use RTPBuffer at all, we don't use this method
         pass
 
     def serve(self, playerconn):
@@ -324,14 +395,13 @@ class AudioBuffered(Audio):
             return 0
         rtptime_offset = rtp_ts - self.anchorRtpTime
         realtime_offset_ms = (time.monotonic_ns() - self.anchorMonotonicTime) / 10 ** 6
-        # TODO: replace 44100 with real framerate
-        time_offset_ms = (1000 * rtptime_offset / 44100) - realtime_offset_ms
+        time_offset_ms = (1000 * rtptime_offset / self.sample_rate) - realtime_offset_ms
         return time_offset_ms
 
     def get_min_timestamp(self):
         realtime_offset_sec = (time.monotonic_ns() - self.anchorMonotonicTime) / 10 ** 9
         print("player: get_min_timestamp - realtime_offset_sec={:06.4f}".format(realtime_offset_sec))
-        res = self.anchorRtpTime + realtime_offset_sec * 44100
+        res = self.anchorRtpTime + realtime_offset_sec * self.sample_rate
         print("player: get_min_timestamp return=%i" % res)
 
         return res
