@@ -6,6 +6,18 @@ fi
 if [ -z "${AP2IFACE}" ]; then
     export AP2IFACE='wlan0'
 fi
+if [ -z "${AUDIO_DEVICE}" ]; then
+    export AUDIO_DEVICE='default'
+fi
+NO_VOLUME_MANAGEMENT_FLAG=""
+if [ "${NO_VOLUME_MANAGEMENT}" = "true" ]; then
+    NO_VOLUME_MANAGEMENT_FLAG='--no-volume-management'
+fi
+USE_PORTAUDIO_FLAG=""
+if [ "${USE_PORTAUDIO}" = "true" ]; then
+    USE_PORTAUDIO_FLAG='--use-portaudio'
+    NO_VOLUME_MANAGEMENT_FLAG='--no-volume-management'
+fi
 
 # Swap hostname in the avahi config
 sed "s/\(host-name=\).*/\1${AP2HOSTNAME}/g" -i /etc/avahi/avahi-daemon.conf
@@ -16,4 +28,4 @@ sed "s/\(host-name=\).*/\1${AP2HOSTNAME}/g" -i /etc/avahi/avahi-daemon.conf
 
 # Start AirPlay 2 service
 cd /airplay2
-exec python3 ap2-receiver.py -m ${AP2HOSTNAME} -n ${AP2IFACE} --no-volume-management 
+exec python3 ap2-receiver.py -m ${AP2HOSTNAME} -n ${AP2IFACE} --audio-device ${AUDIO_DEVICE} ${NO_VOLUME_MANAGEMENT_FLAG} ${USE_PORTAUDIO_FLAG}
