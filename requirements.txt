@@ -10,3 +10,5 @@ cryptography
 requests
 av
 numpy
+pyaudio
+pyalsaaudio; sys_platform == 'linux'

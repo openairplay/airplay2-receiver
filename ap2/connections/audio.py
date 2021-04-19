@@ -14,6 +14,13 @@ from av.audio.format import AudioFormat
 
 from ..utils import get_logger, get_free_tcp_socket, get_free_udp_socket
 
+USE_PORTAUDIO = False
+
+try:
+    import alsaaudio
+except ImportError:
+    USE_PORTAUDIO = True
+    print("Tried to import alsaaudio/pyalsaaudio. This may not be a problem depending on your setup.")
 
 class RTP:
     def __init__(self, data):
@@ -197,20 +204,32 @@ class Audio:
         AAC_ELD_44100_1 = 1 << 31
         AAC_ELD_48000_1 = 1 << 32
 
-    def __init__(self, session_key, audio_format):
+    def __init__(self, session_key, audio_format, audio_device="default", use_portaudio=False):
         if audio_format != Audio.AudioFormat.ALAC_44100_16_2.value \
                 and audio_format != Audio.AudioFormat.AAC_LC_44100_2.value:
             raise Exception("Unsupported format: %s", Audio.AudioFormat(audio_format)).name
         self.audio_format = audio_format
         self.session_key = session_key
         self.rtp_buffer = RTPBuffer()
+        self.audio_device = audio_device
+        self.use_portaudio = use_portaudio
 
     def init_audio_sink(self):
-        self.pa = pyaudio.PyAudio()
-        self.sink = self.pa.open(format=self.pa.get_format_from_width(2),
-                                 channels=2,
-                                 rate=44100,
-                                 output=True)
+        if self.use_portaudio or USE_PORTAUDIO:
+            self.pa = pyaudio.PyAudio()
+            self.sink = self.pa.open(
+                            format=self.pa.get_format_from_width(2),
+                            channels=2,
+                            rate=44100,
+                            output=True)
+        else:
+            self.sink = alsaaudio.PCM(
+                            device=self.audio_device,
+                            channels=2,
+                            rate=44100,
+                            format=alsaaudio.PCM_FORMAT_S16_LE,
+                            periodsize=1024)
+
         codec = None
         extradata = None
         if self.audio_format == Audio.AudioFormat.ALAC_44100_16_2.value:
@@ -268,8 +287,8 @@ class Audio:
         player_thread.start()
 
     @classmethod
-    def spawn(cls, session_key, audio_format):
-        audio = cls(session_key, audio_format)
+    def spawn(cls, session_key, audio_format, audio_device, use_portaudio):
+        audio = cls(session_key, audio_format, audio_device, use_portaudio)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
@@ -279,8 +298,8 @@ class Audio:
 
 class AudioRealtime(Audio):
 
-    def __init__(self, session_key, audio_format):
-        super(AudioRealtime, self).__init__(session_key, audio_format)
+    def __init__(self, session_key, audio_format, audio_device, use_portaudio):
+        super(AudioRealtime, self).__init__(session_key, audio_format, audio_device, use_portaudio)
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
 
@@ -302,7 +321,7 @@ class AudioRealtime(Audio):
                 if data:
                     rtp = RTP_REALTIME(data)
                     self.handle(rtp)
-                    audio = self.process(rtp)
+                    audio = self.process(rtp)                    
                     self.sink.write(audio)
         except KeyboardInterrupt:
             pass
@@ -312,8 +331,8 @@ class AudioRealtime(Audio):
 
 
 class AudioBuffered(Audio):
-    def __init__(self, session_key, audio_format):
-        super(AudioBuffered, self).__init__(session_key, audio_format)
+    def __init__(self, session_key, audio_format, audio_device, use_portaudio):
+        super(AudioBuffered, self).__init__(session_key, audio_format, audio_device, use_portaudio)
         self.socket = get_free_tcp_socket()
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None
