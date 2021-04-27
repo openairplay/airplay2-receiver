@@ -64,16 +64,10 @@ class RTPBuffer:
         self.flush_to_sequence = None
 
     def increment_index(self, index):
-        if index < self.BUFFER_SIZE - 1:
-            return index + 1
-        else:
-            return 0
+        return (index + 1) % self.BUFFER_SIZE
 
     def decrement_index(self, index):
-        if index == 0:
-            return self.BUFFER_SIZE - 1
-        else:
-            return index - 1
+        return (index + self.BUFFER_SIZE - 1) % self.BUFFER_SIZE
 
     def add(self, rtp_data):
         #print("write  - %i %i" % (self.read_index, self.write_index))
@@ -121,13 +115,9 @@ class RTPBuffer:
         return buffered_object
 
     def get_fullness(self):
-        write_index = self.write_index
-        read_index = self.read_index
-        if read_index < write_index:
-            fill = write_index - read_index
-        else:
-            fill = self.BUFFER_SIZE - read_index + write_index
-        return fill / self.BUFFER_SIZE
+        #get distance between read and write in relation to buff size
+        return ( (self.BUFFER_SIZE + self.write_index - self.read_index) \
+            % self.BUFFER_SIZE)/self.BUFFER_SIZE
 
     def get_bounds(self):
         if self.read_index<= self.write_index:
@@ -136,19 +126,26 @@ class RTPBuffer:
             return self.write_index, self.read_index
 
     def find_seq(self, seq):
-        start_index = self.read_index
-        end_index = self.write_index
+        #do binary search. Bin = O(log n) vs linear O(n)
+        #here we iterate max several times
+        l = self.read_index
+        r = self.write_index #len(self.buffer_array) - 1
 
-        if start_index == -1:
+        if l == -1:
+            return
+        if l == r:
             return
 
-        while True:
-            if start_index == end_index:
-                return
-            if self.buffer_array[start_index].sequence_no == seq:
-                return start_index
-            else:
-                start_index = self.increment_index(start_index)
+        while l <= r:
+            m = (l+r //2) % self.BUFFER_SIZE
+            # print('searching l=%d, r=%d, m=%d, srch=%d, now_at=%d' % \
+            # (l, r, m, seq, self.buffer_array_seqs[m] ))
+            if self.buffer_array_seqs[m] == seq:
+                return m
+            if self.buffer_array_seqs[m] < seq:
+                l = self.increment_index(m)
+            elif self.buffer_array_seqs[m] > seq:
+                l = self.decrement_index(m)
 
     # initialize buffer for reading
     def init(self):
