@@ -49,9 +49,10 @@ class RTP_BUFFERED(RTP):
 # Very simple circular buffer implementation
 class RTPBuffer:
     # TODO : Centralized for both this buffer size and audioBufferSize returned by SETUP
-    BUFFER_SIZE = 8192
-    
-    def __init__(self):
+    BUFFER_SIZE = 1
+
+    def __init__(self, size):
+        self.BUFFER_SIZE = size
         self.buffer_array = numpy.empty(self.BUFFER_SIZE, dtype=RTP_BUFFERED)
         # Stores indexes only for quick bisect search
         self.buffer_array_seqs = numpy.empty(self.BUFFER_SIZE, dtype=int)
@@ -232,10 +233,10 @@ class Audio:
     #
 
 
-    def __init__(self, session_key, audio_format):
+    def __init__(self, session_key, audio_format, buff_size):
         self.audio_format = audio_format
         self.session_key = session_key
-        self.rtp_buffer = RTPBuffer()
+        self.rtp_buffer = RTPBuffer(buff_size)
         self.set_audio_params(self, audio_format)
 
     @staticmethod
@@ -357,8 +358,8 @@ class Audio:
         player_thread.start()
 
     @classmethod
-    def spawn(cls, session_key, audio_format):
-        audio = cls(session_key, audio_format)
+    def spawn(cls, session_key, audio_format, buff):
+        audio = cls(session_key, audio_format, buff)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
@@ -368,8 +369,8 @@ class Audio:
 
 class AudioRealtime(Audio):
 
-    def __init__(self, session_key, audio_format):
-        super(AudioRealtime, self).__init__(session_key, audio_format)
+    def __init__(self, session_key, audio_format, buff):
+        super(AudioRealtime, self).__init__(session_key, audio_format, buff)
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
 
@@ -401,8 +402,8 @@ class AudioRealtime(Audio):
 
 
 class AudioBuffered(Audio):
-    def __init__(self, session_key, audio_format):
-        super(AudioBuffered, self).__init__(session_key, audio_format)
+    def __init__(self, session_key, audio_format, buff):
+        super(AudioBuffered, self).__init__(session_key, audio_format, buff)
         self.socket = get_free_tcp_socket()
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None
