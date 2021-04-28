@@ -9,6 +9,7 @@ multi-room** features. For now it implements:
 - Decoding of all Airplay2 supported CODECs: ALAC, AAC, OPUS, PCM.
  Ref: [here](https://emanuelecozzi.net/docs/airplay2/audio/) and 
       [here](https://emanuelecozzi.net/docs/airplay2/rtsp/#setup)
+- Output latency compensation for sync with other Airplay receivers
 
 For now it does not implement:
  - MFi Authentication / FairPlay v2 (one of them is required by iTunes/Windows)

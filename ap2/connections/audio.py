@@ -50,7 +50,7 @@ class RTP_BUFFERED(RTP):
 class RTPBuffer:
     # TODO : Centralized for both this buffer size and audioBufferSize returned by SETUP
     BUFFER_SIZE = 8192
-
+    
     def __init__(self):
         self.buffer_array = numpy.empty(self.BUFFER_SIZE, dtype=RTP_BUFFERED)
         # Stores indexes only for quick bisect search
@@ -83,7 +83,7 @@ class RTPBuffer:
         else:
             if self.increment_index(self.write_index) == self.read_index:
                 # buffer overflow, we "push" the read index
-                print("buffer: overrrun")
+                print("buffer: over-run")
                 self.read_index = self.increment_index(self.read_index)
         self.write_index = self.increment_index(self.write_index)
 
@@ -258,6 +258,7 @@ class Audio:
         return extradata
 
     def init_audio_sink(self):
+        codecLatencySec = 0
         self.pa = pyaudio.PyAudio()
         self.sink = self.pa.open(format=self.pa.get_format_from_width(2),
                                  channels=self.channel_count,
@@ -290,6 +291,16 @@ class Audio:
         elif'PCM' and '_24_' in self.af:
             self.codec = av.codec.Codec('pcm_s24be', 'r')
 
+        """
+        #It seems that these are not required.
+        if  'ELD'   in self.af:
+            codecLatencySec = (2017 / self.sample_rate)
+        elif'AAC_LC'in self.af:
+            codecLatencySec = (2624 / self.sample_rate)
+        codecLatencySec = 0
+        print('codecLatencySec:',codecLatencySec)
+        """
+
 
         if self.codec is not None:
             self.codecContext = av.codec.CodecContext.create(self.codec)
@@ -304,6 +315,17 @@ class Audio:
             layout='stereo',
             rate=self.sample_rate,
         )
+
+        audioDevicelatency = \
+            self.pa.get_default_output_device_info()['defaultHighOutputLatency']
+            #defaultLowOutputLatency is also available
+        print(f"audioDevicelatency (sec): {audioDevicelatency:0.5f}")
+        pyAudioDelay = self.sink.get_output_latency()
+        print(f"pyAudioDelay (sec): {pyAudioDelay:0.5f}")
+        ptpDelay = 0.002
+        self.sample_delay = pyAudioDelay + audioDevicelatency + codecLatencySec + ptpDelay
+        print(f"Total sample_delay (sec): {self.sample_delay:0.5f}")
+
 
     def decrypt(self, rtp):
         c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
@@ -473,11 +495,13 @@ class AudioBuffered(Audio):
                 rtp = self.rtp_buffer.next()
                 if rtp:
                     time_offset_ms = self.get_time_offset(rtp.timestamp)
-                    if i % 100 == 0:
+                    if i % 1000 == 0:
+                        # pass
                         print("player: offset is %i ms" % time_offset_ms)
-                    if time_offset_ms >= 100:
-                        print("player: offset %i ms too big - seq = %i - sleeping %s sec" % (time_offset_ms, rtp.sequence_no, "{:05.2f}".format(time_offset_ms /1000)))
-                        time.sleep(time_offset_ms / 1000)
+                    if time_offset_ms >= (self.sample_delay * 1000):
+                        # print("player: offset %i ms too big - seq = %i - sleeping %s sec" % (time_offset_ms, rtp.sequence_no, "{:05.2f}".format(time_offset_ms /1000)))
+                        # time.sleep(time_offset_ms / 1000)
+                        time.sleep( (self.sample_delay / 2) - 0.001 )
                     elif time_offset_ms < -100:
                         print("player: offset %i ms too low - seq = %i - sending ontime data request" % (time_offset_ms, rtp.sequence_no))
                         # request on_time data message
