@@ -1,6 +1,5 @@
 import socket
 import string
-import struct
 import multiprocessing
 import enum
 import threading
@@ -22,8 +21,8 @@ class RTP:
         self.extension = (data[0] & 0b00010000) >> 4
         self.csrc_count = data[0] & 0b00001111
 
-        self.timestamp = struct.unpack(">I", data[4:8])[0]
-        self.ssrc = struct.unpack(">I", data[8:12])[0]
+        self.timestamp = int.from_bytes(data[4:8], byteorder='big')
+        self.ssrc = int.from_bytes(data[8:12], byteorder='big')
 
         self.nonce = data[-8:]
         self.tag = data[-24:-8]
@@ -36,7 +35,7 @@ class RTP_REALTIME(RTP):
         super(RTP_REALTIME, self).__init__(data)
         self.payload_type = data[1] & 0b01111111
         self.marker = (data[1] & 0b10000000) >> 7
-        self.sequence_no = struct.unpack(">H", data[2:4])[0]
+        self.sequence_no = int.from_bytes(data[2:4], byteorder='big')
 
 
 class RTP_BUFFERED(RTP):
@@ -44,7 +43,7 @@ class RTP_BUFFERED(RTP):
         super(RTP_BUFFERED, self).__init__(data)
         self.payload_type = 0
         self.marker = 0
-        self.sequence_no = struct.unpack('>I', b'\0' + data[1:4])[0]
+        self.sequence_no = int.from_bytes(b'\0' + data[1:4], byteorder='big')
 
 
 # Very simple circular buffer implementation
@@ -522,7 +521,7 @@ class AudioBuffered(Audio):
 
                 message = conn.recv(2, socket.MSG_WAITALL)
                 if message:
-                    data_len = struct.unpack(">H", message)[0]
+                    data_len = int.from_bytes(message, byteorder='big')
                     data = conn.recv(data_len - 2, socket.MSG_WAITALL)
 
                     rtp = RTP_BUFFERED(data)
