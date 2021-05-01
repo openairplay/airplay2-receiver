@@ -290,8 +290,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(res)
                 else:
                     print("Sending CONTROL/DATA:")
-
-                    stream = Stream(plist["streams"][0])
+                    buff = 8388608 # determines how many CODEC frame size 1024 we can hold
+                    stream = Stream(plist["streams"][0], buff)
                     self.server.streams.append(stream)
                     sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
                     sonos_one_setup_data["streams"][0]["dataPort"] = stream.data_port
@@ -299,7 +299,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     print("[+] controlPort=%d dataPort=%d" % (stream.control_port, stream.data_port))
                     if stream.type == Stream.BUFFERED:
                         sonos_one_setup_data["streams"][0]["type"] = stream.type
-                        sonos_one_setup_data["streams"][0]["audioBufferSize"] = 8388608
+                        sonos_one_setup_data["streams"][0]["audioBufferSize"] = buff
 
                     self.pp.pprint(sonos_one_setup_data)
                     res = writePlistToString(sonos_one_setup_data)
