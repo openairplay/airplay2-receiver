@@ -25,7 +25,10 @@ from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
 from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
+from enum import IntFlag
 
+
+"""
 # No Auth - coreutils, PairSetupMfi
 # MFi Verify fail error after pair-setup[2/5]
 FEATURES = 0x88340405f8a00
@@ -56,6 +59,101 @@ FEATURES = 0x8030040780a00
 # FEATURES = 0x8030040780a00 | (1 << 27)
 
 FEATURES = 0x1c340405fca00
+"""
+
+
+class Feat(IntFlag):
+    def __str__(self):
+        return self.name
+    # https://emanuelecozzi.net/docs/airplay2/features/
+    # 07: seems to need NTP
+    Ft07AirPlayVideo     = 0x0000000000000080  # 1<<7
+    # Ft09 is necessary for iPhones/Music: audio
+    Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
+    Ft10Unknown          = 0x0000000000000400  # 1<<10
+    Ft11AudExtra         = 0x0000000000000800  # 1<<11
+    # 12: doesn't affect connections
+    Ft12Unknown          = 0x0000000000001000  # 1<<12
+    # 13-14 seem to be MFi stuff. 13: prevents assoc.
+    Ft13MFiHardware      = 0x0000000000002000  # 1<<13
+    Ft14MFiSoftware      = 0x0000000000004000  # 1<<14
+    # 15-17 not mandatory -  faster pairing without
+    Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
+    Ft16AudioMetaProgres = 0x0000000000010000  # 1<<16
+    Ft17AudioMetaTxtDAAP = 0x0000000000020000  # 1<<17
+    # macOS needs 18 to pair
+    Ft18RcvAudPCM        = 0x0000000000040000  # 1<<18
+    # macOS needs 19
+    Ft19RcvAudALAC       = 0x0000000000080000  # 1<<19
+    # iOS needs 20
+    Ft20RcvAudAAC_LC     = 0x0000000000100000  # 1<<20
+    Ft21Unknown          = 0x0000000000200000  # 1<<21
+    # Try Ft22 without Ft40 - ANNOUNCE + SDP
+    Ft22AudioUnencrypted = 0x0000000000400000  # 1<<22
+    Ft23RSAAuth          = 0x0000000000800000  # 1<<23
+    # Unknown             = #1<<24-#1<<25
+    # Pairing stalls with longer /auth-setup string w/26
+    # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
+    Ft26AudioMfi         = 0x0000000004000000  # 1<<26
+    # 27: connects and works OK
+    Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
+    Ft29plistMetaData    = 0x0000000020000000  # 1<<29
+    Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
+    # Reserved?           =  # 1<<31
+    # 32: iOS music does not see AP with this flag, but macOS sees video - car HUD?
+    Ft32CarPlay          = 0x0000000100000000  # 1<<32
+    # Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
+    # Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
+    # Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
+    # Ft36Unknown          = 0x0000001000000000  # 1<<36
+    Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
+    Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
+    # 40 absence triggered: code 501, message Unsupported method ('ANNOUNCE')
+    Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
+    Ft41_PTPClock        = 0x0000020000000000  # 1<<41
+    # Ft42ScreenMultiCodec= 0x00040000000000  # 1<<42
+    # 43: sends system sounds thru also(?) - setup fails with iOS/macOS
+    Ft43SystemPairing    = 0x0000080000000000  # 1<<43
+    # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
+    # 45 triggers stream type:96 - 41, stream type:103
+    Ft45_NTPClock        = 0x0000200000000000  # 1<<45
+    Ft46HKPairing        = 0x0000400000000000  # 1<<46
+    Ft47PeerMgmt         = 0x0000800000000000  # 1<<47
+    Ft48TransientPairing = 0x0001000000000000  # 1<<48
+    Ft49AirPlayVideoV2   = 0x0002000000000000  # 1<<49
+    Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
+    Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
+    Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
+    # Ft54APSync           = 0x40000000000000  # 1<<54
+    Ft60AudioMediaDataCt = 0x1000000000000000  # 1<<60
+    """
+    Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
+     iOS just fails at Pair-Setup [2/5]
+    Ft52: triggers on iOS:
+     code 501, message Unsupported method ('SETPEERSX')
+    """
+
+
+# # FEATURES = 0x1c340405fca00 equals the below mask
+# FEATURES = (
+#     Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
+#     | Feat.Ft41_PTPClock | Feat.Ft40BufferedAudio | Feat.Ft38CtrlChanEncrypt
+#     | Feat.Ft30UnifiedAdvertInf | Feat.Ft22AudioUnencrypted
+#     | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
+#     | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
+#     | Feat.Ft14MFiSoftware | Feat.Ft11AudExtra | Feat.Ft09AirPlayAudio
+# )
+
+FEATURES = (
+    Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
+    | Feat.Ft41_PTPClock
+    | Feat.Ft40BufferedAudio
+    | Feat.Ft30UnifiedAdvertInf
+    | Feat.Ft22AudioUnencrypted
+    | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
+    | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
+    | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
+)
 
 DEVICE_ID = None
 IPV4 = None
