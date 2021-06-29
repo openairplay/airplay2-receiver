@@ -823,30 +823,55 @@ class AP2Server(socketserver.TCPServer):
         return hap_socket
 
 
+def list_network_interfaces():
+    print("Available network interfaces:")
+    for interface in ni.interfaces():
+        print(f'  Interface: "{interface}"')
+        addresses = ni.ifaddresses(interface)
+        for address_family in addresses:
+            if address_family in [ni.AF_INET, ni.AF_INET6]:
+                for ak in addresses[address_family]:
+                    for akx in ak:
+                        if str(akx) == 'addr':
+                            print(f"    {'IPv4' if address_family == ni.AF_INET else 'IPv6'}: {str(ak[akx])}")
+
+
 if __name__ == "__main__":
 
     multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
-    parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
-    parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
-    parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
-    parser.add_argument("-f", "--features", required=False, help="Features")
+    parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
+    parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
+    parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
+    parser.add_argument("-f", "--features", help="Features")
+    parser.add_argument("--list-interfaces", help="Prints available network interfaces and exits.", action='store_true')
 
     args = parser.parse_args()
+
+    if args.list_interfaces:
+        list_network_interfaces()
+        exit(0)
+
+    if args.netiface is None:
+        print("[!] Missing --netiface argument. See below for a list of valid interfaces")
+        list_network_interfaces()
+        exit(-1)
 
     try:
         IFEN = args.netiface
         ifen = ni.ifaddresses(IFEN)
-        DISABLE_VM = args.no_volume_management
-        if args.features:
-            try:
-                FEATURES = int(args.features, 16)
-            except Exception:
-                print("[!] Error with feature arg - hex format required")
-                exit(-1)
     except Exception:
-        print("[!] Network interface not found")
+        print("[!] Network interface not found.")
+        list_network_interfaces()
         exit(-1)
+
+    DISABLE_VM = args.no_volume_management
+    if args.features:
+        try:
+            FEATURES = int(args.features, 16)
+        except Exception:
+            print("[!] Error with feature arg - hex format required")
+            exit(-1)
 
     DEVICE_ID = None
     IPV4 = None
