@@ -71,7 +71,7 @@ class RTPBuffer:
         return (index + self.BUFFER_SIZE - 1) % self.BUFFER_SIZE
 
     def add(self, rtp_data):
-        #print("write  - %i %i" % (self.read_index, self.write_index))
+        # print("write  - %i %i" % (self.read_index, self.write_index))
         if self.write_index % 1000 == 0:
             print("buffer: writing - full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index, rtp_data.sequence_no))
 
@@ -95,7 +95,7 @@ class RTPBuffer:
 
     def can_read(self):
         return self.read_index != -1
-        
+
     def next(self):
         # print("read   - %i %i" % (self.read_index, self.write_index))
         if self.read_index == -1:
@@ -116,21 +116,21 @@ class RTPBuffer:
         return buffered_object
 
     def get_fullness(self):
-        #get distance between read and write in relation to buff size
-        return ( (self.BUFFER_SIZE + self.write_index - self.read_index) \
-            % self.BUFFER_SIZE)/self.BUFFER_SIZE
+        # get distance between read and write in relation to buff size
+        return ((self.BUFFER_SIZE + self.write_index - self.read_index)
+                % self.BUFFER_SIZE) / self.BUFFER_SIZE
 
     def get_bounds(self):
-        if self.read_index<= self.write_index:
+        if self.read_index <= self.write_index:
             return self.read_index, self.write_index
         else:
             return self.write_index, self.read_index
 
     def find_seq(self, seq):
-        #do binary search. Bin = O(log n) vs linear O(n)
-        #here we iterate max several times
+        # do binary search. Bin = O(log n) vs linear O(n)
+        # here we iterate max several times
         l = self.read_index
-        r = self.write_index #len(self.buffer_array) - 1
+        r = self.write_index  # len(self.buffer_array) - 1
 
         if l == -1:
             return
@@ -138,7 +138,7 @@ class RTPBuffer:
             return
 
         while l <= r:
-            m = (l+r //2) % self.BUFFER_SIZE
+            m = (l + r // 2) % self.BUFFER_SIZE
             # print('searching l=%d, r=%d, m=%d, srch=%d, now_at=%d' % \
             # (l, r, m, seq, self.buffer_array_seqs[m] ))
             if self.buffer_array_seqs[m] == seq:
@@ -159,6 +159,7 @@ class RTPBuffer:
             return True
         else:
             return False
+
 
 class Audio:
     class AudioFormat(enum.Enum):
@@ -196,7 +197,7 @@ class Audio:
 
     @staticmethod
     def set_audio_params(self, audio_format):
-        #defaults
+        # defaults
         self.sample_rate = 44100
         self.sample_size = 16
         self.channel_count = 2
@@ -221,7 +222,7 @@ class Audio:
             self.sample_size = 16
         elif'_24'   in af:
             self.sample_size = 24
-        else: #default
+        else:  # default
             self.sample_size = 16
 
         if  af.endswith('_1'):
@@ -241,20 +242,20 @@ class Audio:
 
     @staticmethod
     def set_alac_extradata(self, sample_rate, sample_size, channel_count):
-        extradata = bytes()  #a 36-byte QuickTime atom passed through as extradata
-        extradata += (36).to_bytes(4, byteorder='big') #32 bits  atom size
-        extradata += ('alac').encode() #32 bits  tag ('alac')
-        extradata += (0).to_bytes(4, byteorder='big')  #32 bits  tag version (0)
-        extradata += (352).to_bytes(4, byteorder='big') #32 bits  samples per frame
-        extradata += (0).to_bytes(1, byteorder='big')  # 8 bits  compatible version   (0)
-        extradata += (sample_size).to_bytes(1, byteorder='big') # 8 bits  sample size
-        extradata += (40).to_bytes(1, byteorder='big')  # 8 bits  history mult         (40)
-        extradata += (10).to_bytes(1, byteorder='big') # 8 bits  initial history      (10)
-        extradata += (14).to_bytes(1, byteorder='big') # 8 bits  rice param limit     (14)
+        extradata = bytes()  # a 36-byte QuickTime atom passed through as extradata
+        extradata += (36).to_bytes(4, byteorder='big')   # 32 bits  atom size
+        extradata += ('alac').encode()                   # 32 bits  tag ('alac')
+        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  tag version (0)
+        extradata += (352).to_bytes(4, byteorder='big')  # 32 bits  samples per frame
+        extradata += (0).to_bytes(1, byteorder='big')    # 8 bits  compatible version   (0)
+        extradata += (sample_size).to_bytes(1, byteorder='big')  # 8 bits  sample size
+        extradata += (40).to_bytes(1, byteorder='big')   # 8 bits  history mult         (40)
+        extradata += (10).to_bytes(1, byteorder='big')   # 8 bits  initial history      (10)
+        extradata += (14).to_bytes(1, byteorder='big')   # 8 bits  rice param limit     (14)
         extradata += (channel_count).to_bytes(1, byteorder='big')  # 8 bits  channels
-        extradata += (255).to_bytes(2, byteorder='big') # 16 bits  maxRun               (255)
-        extradata += (0).to_bytes(4, byteorder='big') # 32 bits  max coded frame size (0 means unknown)
-        extradata += (0).to_bytes(4, byteorder='big') # 32 bits  average bitrate      (0 means unknown)
+        extradata += (255).to_bytes(2, byteorder='big')  # 16 bits  maxRun               (255)
+        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  max coded frame size (0 means unknown)
+        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  average bitrate      (0 means unknown)
         extradata += (sample_rate).to_bytes(4, byteorder='big')  # 32 bits  samplerate
         return extradata
 
@@ -265,19 +266,19 @@ class Audio:
                                  channels=self.channel_count,
                                  rate=self.sample_rate,
                                  output=True)
-        #nice Python3 crash if we don't check self.sink is null. Not harmful, but should check.
+        # nice Python3 crash if we don't check self.sink is null. Not harmful, but should check.
         if not self.sink:
             exit()
         # codec = None
         extradata = None
         if self.audio_format == Audio.AudioFormat.ALAC_44100_16_2.value:
-            extradata = self.set_alac_extradata(self, 44100, 16, 2 )
+            extradata = self.set_alac_extradata(self, 44100, 16, 2)
         elif self.audio_format == Audio.AudioFormat.ALAC_44100_24_2.value:
-            extradata = self.set_alac_extradata(self, 44100, 24, 2 )
+            extradata = self.set_alac_extradata(self, 44100, 24, 2)
         elif self.audio_format == Audio.AudioFormat.ALAC_48000_16_2.value:
-            extradata = self.set_alac_extradata(self, 48000, 16, 2 )
+            extradata = self.set_alac_extradata(self, 48000, 16, 2)
         elif self.audio_format == Audio.AudioFormat.ALAC_48000_24_2.value:
-            extradata = self.set_alac_extradata(self, 48000, 24, 2 )
+            extradata = self.set_alac_extradata(self, 48000, 24, 2)
 
 
         if  'ALAC'  in self.af:
@@ -286,11 +287,11 @@ class Audio:
             self.codec = av.codec.Codec('aac', 'r')
         elif'OPUS'   in self.af:
             self.codec = av.codec.Codec('opus', 'r')
-        #PCM - not sure which. Easy to fix. 
+        # PCM
         elif'PCM' and '_16_' in self.af:
-            self.codec = av.codec.Codec('pcm_s16be_planar', 'r')
+            self.codec = av.codec.Codec('pcm_s16le_planar', 'r')
         elif'PCM' and '_24_' in self.af:
-            self.codec = av.codec.Codec('pcm_s24be', 'r')
+            self.codec = av.codec.Codec('pcm_s24le', 'r')
 
         """
         #It seems that these are not required.
@@ -301,7 +302,6 @@ class Audio:
         codecLatencySec = 0
         print('codecLatencySec:',codecLatencySec)
         """
-
 
         if self.codec is not None:
             self.codecContext = av.codec.CodecContext.create(self.codec)
@@ -319,14 +319,13 @@ class Audio:
 
         audioDevicelatency = \
             self.pa.get_default_output_device_info()['defaultHighOutputLatency']
-            #defaultLowOutputLatency is also available
+        # defaultLowOutputLatency is also available
         print(f"audioDevicelatency (sec): {audioDevicelatency:0.5f}")
         pyAudioDelay = self.sink.get_output_latency()
         print(f"pyAudioDelay (sec): {pyAudioDelay:0.5f}")
         ptpDelay = 0.002
         self.sample_delay = pyAudioDelay + audioDevicelatency + codecLatencySec + ptpDelay
         print(f"Total sample_delay (sec): {self.sample_delay:0.5f}")
-
 
     def decrypt(self, rtp):
         c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
@@ -366,6 +365,7 @@ class Audio:
         mainprocess.start()
 
         return audio.port, mainprocess, audio.audio_connection
+
 
 class AudioRealtime(Audio):
 
@@ -435,7 +435,7 @@ class AudioBuffered(Audio):
                     finished = True
                 else:
                     pass
-                    #print("player: still forwarding.. ts=%i" % rtp.timestamp)
+                    # print("player: still forwarding.. ts=%i" % rtp.timestamp)
             else:
                 print("player: !!! error while forwarding !!!")
                 finished = True
@@ -549,7 +549,7 @@ class AudioBuffered(Audio):
                     rtp = RTP_BUFFERED(data)
                     self.handle(rtp)
                     time_offset_ms = self.get_time_offset(rtp.timestamp)
-                    #print("server: writing seq %i timeoffset %i" % (rtp.sequence_no, time_offset_ms))
+                    # print("server: writing seq %i timeoffset %i" % (rtp.sequence_no, time_offset_ms))
                     if seq_to_overtake is None:
                         self.rtp_buffer.add(rtp)
                     else:
