@@ -27,42 +27,64 @@ Next steps:
  - FairPlay v2 Support
 ---
 
-## Raspberry Pi 4
+## Pre-Built Docker Image
+This image is built directly from `master` so may break. Tested with Raspberry Pi.
+
+https://hub.docker.com/r/charlesomer/airplay
+
+Example Docker Compose
+```zsh
+version: "3.8"
+services:
+  airplay:
+    image: charlesomer/airplay:latest
+    restart: always
+    network_mode: host
+    environment: # All variables are optional.
+      # - AP2HOSTNAME=Airplay2Device
+      # - AP2IFACE=eth0
+      # - AUDIO_DEVICE=default # For use with alsaaudio.
+      # - DISABLE_PORTAUDIO=true
+      # - NO_VOLUME_MANAGEMENT=true
+    devices:
+      - "/dev/snd"
+```
+
+## Raspberry Pi
 
 Install docker and then build the image:
 
 ```zsh
-docker build -f docker/Dockerfile -t invano/ap2-receiver .
+docker build -f docker/Dockerfile -t USERNAME/airplay .
 ```
 
 To run the receiver:
 
 ```zsh
-docker run -it --rm --device /dev/snd --net host invano/ap2-receiver
+docker run -it --rm --device /dev/snd --net host USERNAME/airplay
 ```
 
-Default network device is wlan0, you can change this with AP2IFACE env variable:
+## macOS
 
+_macOS has shown issues when playing audio, if anyone is able to take a look at this to confirm/fix that would be great._
+
+Currently `portaudio` is required for MacOS. It can be installed via homebrew:
 ```zsh
-docker run -it --rm --device /dev/snd --env AP2IFACE=eth0 --net host invano/ap2-receiver
-```
-
-## macOS Catalina
-
-To run the receiver please use Python 3 and do the following:
-
-* Run the following commands
-
-```zsh
-brew install python3
 brew install portaudio
-virtualenv -p /usr/local/bin/python3 proto
-source proto/bin/activate
-pip install -r requirements.txt
-pip install --global-option=build_ext --global-option="-I/usr/local/Cellar/portaudio/19.6.0/include" --global-option="-L/usr/local/Cellar/portaudio/19.6.0/lib" pyaudio
+```
+Then, you may be able to use the docker image although this is untested. Add the `--use-portaudio` option. Alternatively, clone the repo and run via python virtualenv.
 
+```zsh
+pip3 install virtualenv
+virtualenv -p /usr/local/bin/python3 airplay-env
+source airplay-env/bin/activate
+pip3 install -r requirements.txt
+
+# The following line may not be required.
+# pip3 install --global-option=build_ext --global-option="-I/usr/local/Cellar/portaudio/19.6.0/include" --global-option="-L/usr/local/Cellar/portaudio/19.6.0/lib" pyaudio
 
 python ap2-receiver.py -m myap2 --netiface=en0
+# Allow incoming connections.
 ```
 
 ## Windows
