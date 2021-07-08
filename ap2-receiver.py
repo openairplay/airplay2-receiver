@@ -68,7 +68,7 @@ HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 
 AUDIO_DEVICE = "default"
-USE_PORTAUDIO = False
+USE_PORTAUDIO = True
 
 def setup_global_structs(args):
     global sonos_one_info
@@ -715,7 +715,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
     parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
     parser.add_argument("-d", "--audio-device", required=False, help="Specify output device (string).", default='default') 
-    parser.add_argument("-po", "--use-portaudio", required=False, help="Use port audio (useful for Windows and MacOS).", default=False)
+    parser.add_argument("-dpo", "--disable-portaudio", required=False, help="Disable portaudio.", default=False)
     parser.add_argument("-f", "--features", required=False, help="Features")
 
     args = parser.parse_args()
@@ -726,7 +726,7 @@ if __name__ == "__main__":
         DISABLE_VM = args.no_volume_management
 
         AUDIO_DEVICE = args.audio_device
-        USE_PORTAUDIO = args.use_portaudio
+        USE_PORTAUDIO = not args.disable_portaudio
         if args.features:
             try:
                 FEATURES = int(args.features, 16)
