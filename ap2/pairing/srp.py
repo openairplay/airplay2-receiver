@@ -114,10 +114,8 @@ class SRPServer():
         self.K = H(self.S)
         self.M1 = H(H(self.N) ^ H(self.g), H(self.username), self.s, self.A, self.B, self.K)
 
-
     def verify(self, M1_client):
         if self.M1 != from_bytes(M1_client):
             raise Exception("Authentication failed - invalid proof")
         self.M2 = H(self.A, self.M1, self.K)
         return True
-

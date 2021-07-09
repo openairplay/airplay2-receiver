@@ -166,6 +166,7 @@ HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 
+
 def setup_global_structs(args):
     global sonos_one_info
     global sonos_one_setup
@@ -176,21 +177,26 @@ def setup_global_structs(args):
     sonos_one_info = {
         # 'OSInfo': 'Linux 3.10.53',
         # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
-        'audioLatencies': [   {   'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'default',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'media',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'media',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 102}],
+        'audioLatencies': [{
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'default',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'media',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'media',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 102
+                           }],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
         'features': FEATURES,
@@ -204,60 +210,64 @@ def setup_global_structs(args):
         'model': 'One',
         'name': 'Camera da letto',
         'nameIsFactoryDefault': False,
-        'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93', # UUID generated casually..
+        'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93',  # UUID generated casually..
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': '366.0',
         'statusFlags': 4,
         # 'statusFlags': 0x404 # Sonos One
-        }
+    }
 
     if DISABLE_VM:
         volume = 0
-    else: 
+    else:
         volume = get_volume()
     second_stage_info = {
         "initialVolume": volume,
-        }
+    }
 
     sonos_one_setup = {
-            'eventPort': 0,  # AP2 receiver event server
-            'timingPort': 0,
-            'timingPeerInfo': {
-                'Addresses': [
-                    IPV4, IPV6], 
-                'ID': IPV4}
-            }
+        'eventPort': 0,  # AP2 receiver event server
+        'timingPort': 0,
+        'timingPeerInfo': {
+            'Addresses':
+            [
+                IPV4,
+                IPV6
+            ],
+            'ID': IPV4}
+    }
 
     sonos_one_setup_data = {
-            'streams': [
-                {
-                    'type': 96, 
-                    'dataPort': 0, # AP2 receiver data server 
-                    'controlPort': 0 # AP2 receiver control server
-                    }
-                ]
+        'streams': [
+            {
+                'type': 96,
+                'dataPort': 0,    # AP2 receiver data server
+                'controlPort': 0  # AP2 receiver control server
             }
+        ]
+    }
 
     mdns_props = {
-            "srcvers": SERVER_VERSION,
-            "deviceid": DEVICE_ID,
-            "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
-            "flags": "0x4",
-            # "name": "GINO", # random
-            "model": "Airplay2-Receiver",  # random
-            # "manufacturer": "Pino", # random
-            # "serialNumber": "01234xX321", # random
-            "protovers": "1.1",
-            "acl": "0",
-            "rsf": "0x0",
-            "fv": "p20.78000.12",
-            "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
-            "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
-            "gcgl": "0",
-            # "vn": "65537",
-            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
-            }
+        "srcvers": SERVER_VERSION,
+        "deviceid": DEVICE_ID,
+        "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
+        "flags": "0x4",
+        # "name": "GINO", # random
+        "model": "Airplay2-Receiver",  # random
+        # "manufacturer": "Pino", # random
+        # "serialNumber": "01234xX321", # random
+        "protovers": "1.1",
+        "acl": "0",
+        "rsf": "0x0",
+        "fv": "p20.78000.12",
+        "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb",   # UUID generated casually
+        "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # UUID generated casually
+        "gcgl": "0",
+        # "vn": "65537",
+        "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
+    }
+
 
 class AP2Handler(http.server.BaseHTTPRequestHandler):
 
@@ -299,7 +309,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
-        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT") 
+        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT")
         self.end_headers()
 
     def do_FLUSHBUFFERED(self):
@@ -389,7 +399,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(res)
                 else:
                     print("Sending CONTROL/DATA:")
-                    buff = 8388608 # determines how many CODEC frame size 1024 we can hold
+                    buff = 8388608  # determines how many CODEC frame size 1024 we can hold
                     stream = Stream(plist["streams"][0], buff)
                     self.server.streams.append(stream)
                     sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
@@ -441,7 +451,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        hexdump(res);
+        hexdump(res)
         self.wfile.write(res)
 
     def do_SET_PARAMETER(self):
@@ -539,7 +549,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        
+
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
 
@@ -597,7 +607,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 # feedback logs are pretty much noise...
-                #self.pp.pprint(plist)
+                # self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -731,39 +741,45 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def upgrade_to_encrypted(self, shared_key):
         self.request = self.server.upgrade_to_encrypted(
-                                    self.client_address,
-                                    shared_key)
+            self.client_address,
+            shared_key)
         self.connection = self.request
         self.rfile = self.connection.makefile('rb', self.rbufsize)
         self.wfile = self.connection.makefile('wb')
         self.is_encrypted = True
         print("----- ENCRYPTED CHANNEL -----")
 
+
 def register_mdns(receiver_name):
     addresses = []
     for ifen in ni.interfaces():
         ifenaddr = ni.ifaddresses(ifen)
         if ni.AF_INET in ifenaddr:
-            addresses.append(socket.inet_pton(ni.AF_INET,
-                ifenaddr[ni.AF_INET][0]["addr"]))
+            addresses.append(socket.inet_pton(
+                ni.AF_INET,
+                ifenaddr[ni.AF_INET][0]["addr"])
+            )
         if ni.AF_INET6 in ifenaddr:
-            addresses.append(socket.inet_pton(ni.AF_INET6,
-                ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0]))
+            addresses.append(socket.inet_pton(
+                ni.AF_INET6,
+                ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0])
+            )
 
     info = ServiceInfo(
-            "_airplay._tcp.local.",
-            "%s._airplay._tcp.local." % receiver_name,
-            # addresses=[socket.inet_aton("127.0.0.1")],
-            addresses=addresses,
-            port=7000,
-            properties=mdns_props,
-            server="%s.local." % receiver_name,
-            )
+        "_airplay._tcp.local.",
+        "%s._airplay._tcp.local." % receiver_name,
+        # addresses=[socket.inet_aton("127.0.0.1")],
+        addresses=addresses,
+        port=7000,
+        properties=mdns_props,
+        server="%s.local." % receiver_name,
+    )
 
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
     zeroconf.register_service(info)
     print("mDNS service registered")
     return (zeroconf, info)
+
 
 def unregister_mdns(zeroconf, info):
     print("Unregistering...")
@@ -793,7 +809,7 @@ class AP2Server(socketserver.TCPServer):
         self.enc_layer = False
         self.streams = []
 
-    #Override
+    # Override
     def get_request(self):
         client_socket, client_addr = super().get_request()
         print("Got connection with %s:%d" % client_addr)
@@ -805,6 +821,7 @@ class AP2Server(socketserver.TCPServer):
         hap_socket = HAPSocket(client_socket, shared_key)
         self.connections[client_address] = hap_socket
         return hap_socket
+
 
 if __name__ == "__main__":
 
