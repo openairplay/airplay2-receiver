@@ -384,7 +384,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.pp.pprint(sonos_one_setup)
                     res = writePlistToString(sonos_one_setup)
                     self.send_response(200)
-                    self.send_header("Content-Length", len(res))
+                    self.send_header("Content-Length", str(len(res)))
                     self.send_header("Content-Type", HTTP_CT_BPLIST)
                     self.send_header("Server", self.version_string())
                     self.send_header("CSeq", self.headers["CSeq"])
@@ -407,7 +407,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     res = writePlistToString(sonos_one_setup_data)
 
                     self.send_response(200)
-                    self.send_header("Content-Length", len(res))
+                    self.send_header("Content-Length", str(len(res)))
                     self.send_header("Content-Type", HTTP_CT_BPLIST)
                     self.send_header("Server", self.version_string())
                     self.send_header("CSeq", self.headers["CSeq"])
@@ -439,12 +439,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         else:
             res = b"\r\n".join(b"%s: %s" % (k, v) for k, v in params_res.items()) + b"\r\n"
         self.send_response(200)
-        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Length", str(len(res)))
         self.send_header("Content-Type", HTTP_CT_PARAM)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        hexdump(res);
+        hexdump(res)
         self.wfile.write(res)
 
     def do_SET_PARAMETER(self):
@@ -642,7 +642,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             hexdump(body)
 
         self.send_response(200)
-        self.send_header("Content-Length", len(response))
+        self.send_header("Content-Length", str(len(response)))
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
@@ -659,7 +659,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         res = self.server.hap.pair_setup(body)
 
         self.send_response(200)
-        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Length", str(len(res)))
         self.send_header("Content-Type", HTTP_CT_BPLIST)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -680,7 +680,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         res = self.server.hap.pair_verify(body)
 
         self.send_response(200)
-        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Length", str(len(res)))
         self.send_header("Content-Type", HTTP_CT_OCTET)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -706,7 +706,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         res = writePlistToString(sonos_one_info)
 
                         self.send_response(200)
-                        self.send_header("Content-Length", len(res))
+                        self.send_header("Content-Length", str(len(res)))
                         self.send_header("Content-Type", HTTP_CT_BPLIST)
                         self.send_header("Server", self.version_string())
                         self.send_header("CSeq", self.headers["CSeq"])
@@ -726,7 +726,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         else:
             res = writePlistToString(sonos_one_info)
             self.send_response(200)
-            self.send_header("Content-Length", len(res))
+            self.send_header("Content-Length", str(len(res)))
             self.send_header("Content-Type", HTTP_CT_BPLIST)
             self.send_header("Server", self.version_string())
             self.send_header("CSeq", self.headers["CSeq"])
