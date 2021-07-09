@@ -24,6 +24,7 @@ from ap2.utils import get_volume, set_volume
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
 from ap2.connections.stream import Stream
+from ap2.dxxp import parse_dxxp
 
 # No Auth - coreutils, PairSetupMfi
 # MFi Verify fail error after pair-setup[2/5]
@@ -377,8 +378,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 print("Artwork saved to %s" % fname)
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
-                self.rfile.read(content_len)
-                print("Now plaing DAAP info. (need a daap parser here)")
+                parse_dxxp(self.rfile.read(content_len))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
