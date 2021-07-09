@@ -27,7 +27,6 @@ from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
 from enum import IntFlag
 
-
 """
 # No Auth - coreutils, PairSetupMfi
 # MFi Verify fail error after pair-setup[2/5]
@@ -65,65 +64,66 @@ FEATURES = 0x1c340405fca00
 class Feat(IntFlag):
     def __str__(self):
         return self.name
+
     # https://emanuelecozzi.net/docs/airplay2/features/
     # 07: seems to need NTP
-    Ft07AirPlayVideo     = 0x0000000000000080  # 1<<7
+    Ft07AirPlayVideo = 0x0000000000000080  # 1<<7
     # Ft09 is necessary for iPhones/Music: audio
-    Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
-    Ft10Unknown          = 0x0000000000000400  # 1<<10
-    Ft11AudExtra         = 0x0000000000000800  # 1<<11
+    Ft09AirPlayAudio = 0x0000000000000200  # 1<<9
+    Ft10Unknown = 0x0000000000000400  # 1<<10
+    Ft11AudExtra = 0x0000000000000800  # 1<<11
     # 12: doesn't affect connections
-    Ft12Unknown          = 0x0000000000001000  # 1<<12
+    Ft12Unknown = 0x0000000000001000  # 1<<12
     # 13-14 seem to be MFi stuff. 13: prevents assoc.
-    Ft13MFiHardware      = 0x0000000000002000  # 1<<13
-    Ft14MFiSoftware      = 0x0000000000004000  # 1<<14
+    Ft13MFiHardware = 0x0000000000002000  # 1<<13
+    Ft14MFiSoftware = 0x0000000000004000  # 1<<14
     # 15-17 not mandatory -  faster pairing without
-    Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
+    Ft15AudioMetaCovers = 0x0000000000008000  # 1<<15
     Ft16AudioMetaProgres = 0x0000000000010000  # 1<<16
     Ft17AudioMetaTxtDAAP = 0x0000000000020000  # 1<<17
     # macOS needs 18 to pair
-    Ft18RcvAudPCM        = 0x0000000000040000  # 1<<18
+    Ft18RcvAudPCM = 0x0000000000040000  # 1<<18
     # macOS needs 19
-    Ft19RcvAudALAC       = 0x0000000000080000  # 1<<19
+    Ft19RcvAudALAC = 0x0000000000080000  # 1<<19
     # iOS needs 20
-    Ft20RcvAudAAC_LC     = 0x0000000000100000  # 1<<20
-    Ft21Unknown          = 0x0000000000200000  # 1<<21
+    Ft20RcvAudAAC_LC = 0x0000000000100000  # 1<<20
+    Ft21Unknown = 0x0000000000200000  # 1<<21
     # Try Ft22 without Ft40 - ANNOUNCE + SDP
     Ft22AudioUnencrypted = 0x0000000000400000  # 1<<22
-    Ft23RSAAuth          = 0x0000000000800000  # 1<<23
+    Ft23RSAAuth = 0x0000000000800000  # 1<<23
     # Unknown             = #1<<24-#1<<25
     # Pairing stalls with longer /auth-setup string w/26
     # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
-    Ft26AudioMfi         = 0x0000000004000000  # 1<<26
+    Ft26AudioMfi = 0x0000000004000000  # 1<<26
     # 27: connects and works OK
-    Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
-    Ft29plistMetaData    = 0x0000000020000000  # 1<<29
+    Ft27LegacyPairing = 0x0000000008000000  # 1<<27
+    Ft29plistMetaData = 0x0000000020000000  # 1<<29
     Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
     # Reserved?           =  # 1<<31
     # 32: iOS music does not see AP with this flag, but macOS sees video - car HUD?
-    Ft32CarPlay          = 0x0000000100000000  # 1<<32
+    Ft32CarPlay = 0x0000000100000000  # 1<<32
     # Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
     # Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
     # Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
     # Ft36Unknown          = 0x0000001000000000  # 1<<36
-    Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
-    Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
+    Ft37CarPlayCtrl = 0x0000002000000000  # 1<<37
+    Ft38CtrlChanEncrypt = 0x0000004000000000  # 1<<38
     # 40 absence triggered: code 501, message Unsupported method ('ANNOUNCE')
-    Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
-    Ft41_PTPClock        = 0x0000020000000000  # 1<<41
+    Ft40BufferedAudio = 0x0000010000000000  # 1<<40
+    Ft41_PTPClock = 0x0000020000000000  # 1<<41
     # Ft42ScreenMultiCodec= 0x00040000000000  # 1<<42
     # 43: sends system sounds thru also(?) - setup fails with iOS/macOS
-    Ft43SystemPairing    = 0x0000080000000000  # 1<<43
+    Ft43SystemPairing = 0x0000080000000000  # 1<<43
     # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
     # 45 triggers stream type:96 - 41, stream type:103
-    Ft45_NTPClock        = 0x0000200000000000  # 1<<45
-    Ft46HKPairing        = 0x0000400000000000  # 1<<46
-    Ft47PeerMgmt         = 0x0000800000000000  # 1<<47
+    Ft45_NTPClock = 0x0000200000000000  # 1<<45
+    Ft46HKPairing = 0x0000400000000000  # 1<<46
+    Ft47PeerMgmt = 0x0000800000000000  # 1<<47
     Ft48TransientPairing = 0x0001000000000000  # 1<<48
-    Ft49AirPlayVideoV2   = 0x0002000000000000  # 1<<49
-    Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
-    Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
-    Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
+    Ft49AirPlayVideoV2 = 0x0002000000000000  # 1<<49
+    Ft50NowPlayingInfo = 0x0004000000000000  # 1<<50
+    Ft51MfiPairSetup = 0x0008000000000000  # 1<<51
+    Ft52PeersExtMsg = 0x0010000000000000  # 1<<52
     # Ft54APSync           = 0x40000000000000  # 1<<54
     Ft60AudioMediaDataCt = 0x1000000000000000  # 1<<60
     """
@@ -145,14 +145,14 @@ class Feat(IntFlag):
 # )
 
 FEATURES = (
-    Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
-    | Feat.Ft41_PTPClock
-    | Feat.Ft40BufferedAudio
-    | Feat.Ft30UnifiedAdvertInf
-    | Feat.Ft22AudioUnencrypted
-    | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
-    | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
-    | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
+        Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
+        | Feat.Ft41_PTPClock
+        | Feat.Ft40BufferedAudio
+        | Feat.Ft30UnifiedAdvertInf
+        | Feat.Ft22AudioUnencrypted
+        | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
+        | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
+        | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
 )
 
 DEVICE_ID = None
@@ -166,6 +166,7 @@ HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 
+
 def setup_global_structs(args):
     global sonos_one_info
     global sonos_one_setup
@@ -176,21 +177,21 @@ def setup_global_structs(args):
     sonos_one_info = {
         # 'OSInfo': 'Linux 3.10.53',
         # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
-        'audioLatencies': [   {   'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'default',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'media',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 100},
-                              {   'audioType': 'media',
-                                  'inputLatencyMicros': 0,
-                                  'outputLatencyMicros': 400000,
-                                  'type': 102}],
+        'audioLatencies': [{'inputLatencyMicros': 0,
+                            'outputLatencyMicros': 400000,
+                            'type': 100},
+                           {'audioType': 'default',
+                            'inputLatencyMicros': 0,
+                            'outputLatencyMicros': 400000,
+                            'type': 100},
+                           {'audioType': 'media',
+                            'inputLatencyMicros': 0,
+                            'outputLatencyMicros': 400000,
+                            'type': 100},
+                           {'audioType': 'media',
+                            'inputLatencyMicros': 0,
+                            'outputLatencyMicros': 400000,
+                            'type': 102}],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
         'features': FEATURES,
@@ -204,63 +205,63 @@ def setup_global_structs(args):
         'model': 'One',
         'name': 'Camera da letto',
         'nameIsFactoryDefault': False,
-        'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93', # UUID generated casually..
+        'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93',  # UUID generated casually..
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': '366.0',
         'statusFlags': 4,
         # 'statusFlags': 0x404 # Sonos One
-        }
+    }
 
     if DISABLE_VM:
         volume = 0
-    else: 
+    else:
         volume = get_volume()
     second_stage_info = {
         "initialVolume": volume,
-        }
+    }
 
     sonos_one_setup = {
-            'eventPort': 0,  # AP2 receiver event server
-            'timingPort': 0,
-            'timingPeerInfo': {
-                'Addresses': [
-                    IPV4, IPV6], 
-                'ID': IPV4}
-            }
+        'eventPort': 0,  # AP2 receiver event server
+        'timingPort': 0,
+        'timingPeerInfo': {
+            'Addresses': [
+                IPV4, IPV6],
+            'ID': IPV4}
+    }
 
     sonos_one_setup_data = {
-            'streams': [
-                {
-                    'type': 96, 
-                    'dataPort': 0, # AP2 receiver data server 
-                    'controlPort': 0 # AP2 receiver control server
-                    }
-                ]
+        'streams': [
+            {
+                'type': 96,
+                'dataPort': 0,  # AP2 receiver data server
+                'controlPort': 0  # AP2 receiver control server
             }
+        ]
+    }
 
     mdns_props = {
-            "srcvers": SERVER_VERSION,
-            "deviceid": DEVICE_ID,
-            "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
-            "flags": "0x4",
-            # "name": "GINO", # random
-            "model": "Airplay2-Receiver",  # random
-            # "manufacturer": "Pino", # random
-            # "serialNumber": "01234xX321", # random
-            "protovers": "1.1",
-            "acl": "0",
-            "rsf": "0x0",
-            "fv": "p20.78000.12",
-            "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
-            "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb", # UUID generated casually
-            "gcgl": "0",
-            # "vn": "65537",
-            "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
-            }
+        "srcvers": SERVER_VERSION,
+        "deviceid": DEVICE_ID,
+        "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
+        "flags": "0x4",
+        # "name": "GINO", # random
+        "model": "Airplay2-Receiver",  # random
+        # "manufacturer": "Pino", # random
+        # "serialNumber": "01234xX321", # random
+        "protovers": "1.1",
+        "acl": "0",
+        "rsf": "0x0",
+        "fv": "p20.78000.12",
+        "pi": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # UUID generated casually
+        "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # UUID generated casually
+        "gcgl": "0",
+        # "vn": "65537",
+        "pk": "de352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
+    }
+
 
 class AP2Handler(http.server.BaseHTTPRequestHandler):
-
     pp = pprint.PrettyPrinter()
 
     def parse_request(self):
@@ -299,7 +300,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
-        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT") 
+        self.send_header("Public",
+                         "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT")
         self.end_headers()
 
     def do_FLUSHBUFFERED(self):
@@ -320,7 +322,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     flush_from_seq = plist["flushFromSeq"]
                 if "flushUntilSeq" in plist:
                     flush_until_seq = plist["flushUntilSeq"]
-                    self.server.streams[0].audio_connection.send("flush_from_until_seq-%i-%i" % (flush_from_seq, flush_until_seq))
+                    self.server.streams[0].audio_connection.send(
+                        "flush_from_until_seq-%i-%i" % (flush_from_seq, flush_until_seq))
                 self.pp.pprint(plist)
 
     def do_POST(self):
@@ -389,7 +392,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(res)
                 else:
                     print("Sending CONTROL/DATA:")
-                    buff = 8388608 # determines how many CODEC frame size 1024 we can hold
+                    buff = 8388608  # determines how many CODEC frame size 1024 we can hold
                     stream = Stream(plist["streams"][0], buff)
                     self.server.streams.append(stream)
                     sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
@@ -539,7 +542,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        
+
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
 
@@ -581,7 +584,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         iplist = readPlistFromString(p)
                         newin.append(iplist)
                     plist["params"]["mrSupportedCommandsFromSender"] = newin
-                if "params" in plist["params"] and "kMRMediaRemoteNowPlayingInfoArtworkData" in plist["params"]["params"]:
+                if "params" in plist["params"] and "kMRMediaRemoteNowPlayingInfoArtworkData" in plist["params"][
+                    "params"]:
                     plist["params"]["params"]["kMRMediaRemoteNowPlayingInfoArtworkData"] = "<redacted ..too long>"
                 self.pp.pprint(plist)
         self.send_response(200)
@@ -597,7 +601,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 # feedback logs are pretty much noise...
-                #self.pp.pprint(plist)
+                # self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -731,13 +735,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def upgrade_to_encrypted(self, shared_key):
         self.request = self.server.upgrade_to_encrypted(
-                                    self.client_address,
-                                    shared_key)
+            self.client_address,
+            shared_key)
         self.connection = self.request
         self.rfile = self.connection.makefile('rb', self.rbufsize)
         self.wfile = self.connection.makefile('wb')
         self.is_encrypted = True
         print("----- ENCRYPTED CHANNEL -----")
+
 
 def register_mdns(receiver_name):
     addresses = []
@@ -745,25 +750,26 @@ def register_mdns(receiver_name):
         ifenaddr = ni.ifaddresses(ifen)
         if ni.AF_INET in ifenaddr:
             addresses.append(socket.inet_pton(ni.AF_INET,
-                ifenaddr[ni.AF_INET][0]["addr"]))
+                                              ifenaddr[ni.AF_INET][0]["addr"]))
         if ni.AF_INET6 in ifenaddr:
             addresses.append(socket.inet_pton(ni.AF_INET6,
-                ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0]))
+                                              ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0]))
 
     info = ServiceInfo(
-            "_airplay._tcp.local.",
-            "%s._airplay._tcp.local." % receiver_name,
-            # addresses=[socket.inet_aton("127.0.0.1")],
-            addresses=addresses,
-            port=7000,
-            properties=mdns_props,
-            server="%s.local." % receiver_name,
-            )
+        "_airplay._tcp.local.",
+        "%s._airplay._tcp.local." % receiver_name,
+        # addresses=[socket.inet_aton("127.0.0.1")],
+        addresses=addresses,
+        port=7000,
+        properties=mdns_props,
+        server="%s.local." % receiver_name,
+    )
 
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
     zeroconf.register_service(info)
     print("mDNS service registered")
-    return (zeroconf, info)
+    return zeroconf, info
+
 
 def unregister_mdns(zeroconf, info):
     print("Unregistering...")
@@ -793,12 +799,12 @@ class AP2Server(socketserver.TCPServer):
         self.enc_layer = False
         self.streams = []
 
-    #Override
+    # Override
     def get_request(self):
         client_socket, client_addr = super().get_request()
         print("Got connection with %s:%d" % client_addr)
         self.connections[client_addr] = client_socket
-        return (client_socket, client_addr)
+        return client_socket, client_addr
 
     def upgrade_to_encrypted(self, client_address, shared_key):
         client_socket = self.connections[client_address]
@@ -806,13 +812,15 @@ class AP2Server(socketserver.TCPServer):
         self.connections[client_address] = hap_socket
         return hap_socket
 
+
 if __name__ == "__main__":
 
     multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     parser.add_argument("-m", "--mdns", required=True, help="mDNS name to announce")
     parser.add_argument("-n", "--netiface", required=True, help="Network interface to bind to")
-    parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management", action='store_true')
+    parser.add_argument("-nv", "--no-volume-management", required=False, help="Disable volume management",
+                        action='store_true')
     parser.add_argument("-f", "--features", required=False, help="Features")
 
     args = parser.parse_args()
