@@ -7,6 +7,7 @@ Behaviour here is derived from that observed within AirPlay v2.
 """
 
 import enum
+
 # from ctypes import *
 
 
@@ -16,61 +17,70 @@ UnregisteredError = 'Unregistered code type:'
 class PlayState(enum.Enum):
     def __str__(self):
         return self.name
-    Undefined   = 0
-    Playing     = 1
-    Paused      = 2
-    Stopped     = 3
+
+    Undefined = 0
+    Playing = 1
+    Paused = 2
+    Stopped = 3
     FastForward = 4
-    Rewind      = 5
+    Rewind = 5
 
 
 class SongType(enum.Enum):
     def __str__(self):
         return self.name
-    LocalFile    = 0
+
+    LocalFile = 0
     RemoteStream = 1
 
 
 class Rating(enum.Enum):
     def __str__(self):
         return self.name
+
     NoRestrictions = 0
-    SomeAdvisory   = 1
-    CleanLyrics    = 2
+    SomeAdvisory = 1
+    CleanLyrics = 2
 
 
 class Type(enum.Enum):
     """
     Returns the content type
     """
+
     def __str__(self):
         return self.name
-    Undefined   = 0
-    Boolean     = 1  # 1 = true, 0/nothing = false
-    UInt8       = 1  # Boolean/UInt8 are the same
-    SInt8       = 2
-    UInt16      = 3
-    SInt16      = 4
-    UInt32      = 5
-    SInt32      = 6
-    UInt64      = 7
-    SInt64      = 8
-    UTF8Chars   = 9
-    Date        = 10  # UNIX UTC: sec since Jan 1970
-    Version     = 11  # major -> ms = 16, minor -> ls = 16
+
+    Undefined = 0
+    Boolean = 1  # 1 = true, 0/nothing = false
+    UInt8 = 1  # Boolean/UInt8 are the same
+    SInt8 = 2
+    UInt16 = 3
+    SInt16 = 4
+    UInt32 = 5
+    SInt32 = 6
+    UInt64 = 7
+    SInt64 = 8
+    UTF8Chars = 9
+    Date = 10  # UNIX UTC: sec since Jan 1970
+    Version = 11  # major -> ms = 16, minor -> ls = 16
     ArrayHeader = 12
-    DictHeader  = 13
-    Float32     = 14
-    Custom      = 15
+    DictHeader = 13
+    Float32 = 14
+    Custom = 15
 
 
 class Code(enum.Enum):
     """ coerce to string """
+
     def __str__(self):
         return self.value['inst']
+
     """ coerce to hex """
+
     def __hex__(self):
         return self.value['octal']
+
     """ Codes; octal for reference
     # Other DXXP efforts list other Codes. Add as needed, using the below structure.
     """
@@ -111,10 +121,10 @@ def parse_dxxp(chunk):
         # Otherwise return 0
         return int.from_bytes(data, byteorder='big') if (len(data) % 2) == 0 or len(data) == 1 else 0
 
-    if(len(chunk) > 0):
+    if len(chunk) > 0:
         # Define get frame
         def get_next_frame(_in):
-            if(len(_in) == 0):
+            if len(_in) == 0:
                 """
                 return when we reached the last frame.
                  Note: if we get a huge amount of frames, one may need
@@ -144,55 +154,55 @@ def parse_dxxp(chunk):
             data = _in[8:8 + leng]
             # print('data:', data)
 
-            if(leng == 0):
+            if leng == 0:
                 # skip it
                 pass
-            elif(leng == 0 and _typ  == (Type.Boolean)):
+            elif leng == 0 and _typ == Type.Boolean:
                 # In case Boolean has length 0
                 print(code, ':', False)
-            if(leng > 0):
+            if leng > 0:
                 # print('fr_length:', leng)
                 # print('fr_data:', data)
-                if(code == (Code.mlit or Code.msrv or Code.mdcl)):
+                if code == (Code.mlit or Code.msrv or Code.mdcl):
                     get_next_frame(data)
 
-                elif(code == Code.caps):
+                elif code == Code.caps:
                     print(code, ':', PlayState(get_int(data)))
 
-                elif(code == Code.ascr):
+                elif code == Code.ascr:
                     print(code, ':', Rating(get_int(data)))
 
-                elif(_typ == (Type.Boolean)):
+                elif _typ == Type.Boolean:
                     print(code, ':', bool(get_int(data)))
 
-                elif(_typ == (Type.UInt8 or Type.UInt16 or Type.UInt32)):
+                elif _typ == (Type.UInt8 or Type.UInt16 or Type.UInt32):
                     print(code, ':', get_int(data))
 
-                elif(_typ == (Type.SInt8 or Type.SInt16 or Type.SInt32)):
+                elif _typ == (Type.SInt8 or Type.SInt16 or Type.SInt32):
                     print(code, ':', get_int(data))
 
-                elif(_typ == (Type.UInt64 or Type.SInt64)):
+                elif _typ == (Type.UInt64 or Type.SInt64):
                     print(code,
                           ':',
                           get_int(data[0:leng]),
                           '/',
                           f'0x{get_int(data[0:leng]):016x}')
 
-                elif(_typ == Type.UTF8Chars):
+                elif _typ == Type.UTF8Chars:
                     # Just .decode() is OK
                     print(code, ':', data.decode('utf-8'))
 
-                elif(_typ == Type.Date):
+                elif _typ == Type.Date:
                     # Parse a date into UTC, if necessary
                     print(code, ':', get_int(data))
 
-                elif(_typ == Type.Version):
+                elif _typ == Type.Version:
                     print(code, ':', f'{get_int(data[0:2])}.{get_int(data[2:4])}')
 
-                elif(_typ == Type.Float32):
+                elif _typ == Type.Float32:
                     pass
 
-                elif(_typ == Type.Custom):
+                elif _typ == Type.Custom:
                     pass
 
             # get subsequent frame (recursive)
