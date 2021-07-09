@@ -832,10 +832,10 @@ if __name__ == "__main__":
         if args.features:
             try:
                 FEATURES = int(args.features, 16)
-            except Exception:
+            except ValueError:
                 print("[!] Error with feature arg - hex format required")
                 exit(-1)
-    except Exception:
+    except ValueError:
         print("[!] Network interface not found")
         exit(-1)
 
