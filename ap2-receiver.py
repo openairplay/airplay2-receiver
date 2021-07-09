@@ -736,11 +736,11 @@ if __name__ == "__main__":
     DEVICE_ID = None
     IPV4 = None
     IPV6 = None
-    if ifen[ni.AF_LINK]:
+    if ifen.get(ni.AF_LINK):
         DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
-    if ifen[ni.AF_INET]:
+    if ifen.get(ni.AF_INET):
         IPV4 = ifen[ni.AF_INET][0]["addr"]
-    if ifen[ni.AF_INET6]:
+    if ifen.get(ni.AF_INET6):
         IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
     setup_global_structs(args)
