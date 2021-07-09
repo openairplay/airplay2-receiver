@@ -4,6 +4,9 @@ import logging
 import platform
 import subprocess
 
+if platform.system() == "Windows":
+    from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+
 def get_logger(name, level="INFO"):
     logging.basicConfig(filename="%s.log" % name,
                                 filemode='a',
@@ -39,6 +42,19 @@ def interpolate(value, from_min, from_max, to_min, to_max):
 
     return to_min + (value_scale * to_span)
 
+def get_pycaw_volume_session():
+    if platform.system() != 'Windows':
+        return
+    session = None
+    for s in AudioUtilities.GetAllSessions():
+        try:
+            if s.Process.name() == 'python.exe':
+                session = s._ctl.QueryInterface(ISimpleAudioVolume)
+                break
+        except AttributeError:
+            pass
+    return session
+
 def get_volume():
     subsys = platform.system()
     if subsys == "Darwin":
@@ -54,7 +70,13 @@ def get_volume():
         else: pct = 50
         vol = interpolate(pct, 45, 100, -30, 0)
     elif subsys == "Windows":
-        # Volume get is not managed under windows, let's set to a default volume
+        volume_session = get_pycaw_volume_session()
+        if not volume_session:
+            vol = -15
+        else:
+            vol = interpolate(volume_session.GetMasterVolume(), 0, 1, -30, 0)
+    else:
+        # This system is not supported, whatever it is.
         vol = 50
     if vol == -30:
         return -144
@@ -73,3 +95,8 @@ def set_volume(vol):
         pct = int(interpolate(vol, -30, 0, 45, 100))
 
         subprocess.run(["amixer", "set", "PCM", "%d%%" % pct])
+    elif subsys == "Windows":
+        volume_session = get_pycaw_volume_session()
+        if volume_session:
+            pct = interpolate(vol, -30, 0, 0, 1)
+            volume_session.SetMasterVolume(pct, None)

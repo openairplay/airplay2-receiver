@@ -10,3 +10,4 @@ cryptography
 requests
 av
 numpy
+pycaw
