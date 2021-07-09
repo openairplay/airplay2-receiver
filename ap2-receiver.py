@@ -683,6 +683,10 @@ def get_free_port():
 
 
 class AP2Server(socketserver.TCPServer):
+    # Fixes 99% of scenarios on restart after we terminate uncleanly/crash
+    # and port was not closed before crash (is still open).
+    # AP2 client connects from random port.
+    allow_reuse_address = True
 
     def __init__(self, addr_port, handler):
         super().__init__(addr_port, handler)
@@ -729,10 +733,15 @@ if __name__ == "__main__":
         print("[!] Network interface not found")
         exit(-1)
 
-
-    DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
-    IPV4 = ifen[ni.AF_INET][0]["addr"]
-    IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
+    DEVICE_ID = None
+    IPV4 = None
+    IPV6 = None
+    if ifen.get(ni.AF_LINK):
+        DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
+    if ifen.get(ni.AF_INET):
+        IPV4 = ifen[ni.AF_INET][0]["addr"]
+    if ifen.get(ni.AF_INET6):
+        IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
     setup_global_structs(args)
 
@@ -742,13 +751,18 @@ if __name__ == "__main__":
     print()
 
     mdns = register_mdns(args.mdns)
-    print("Starting RSTP server, press Ctrl-C to exit...")
+    print("Starting RTSP server, press Ctrl-C to exit...")
     try:
         PORT = 7000
+        if IPV6 and not IPV4:
+            with AP2Server((IPV6, PORT), AP2Handler) as httpd:
+                print("serving at port", PORT)
+                httpd.serve_forever()
+        else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
+            with AP2Server((IPV4, PORT), AP2Handler) as httpd:
+                print("serving at port", PORT)
+                httpd.serve_forever()
 
-        with AP2Server(("0.0.0.0", PORT), AP2Handler) as httpd:
-            print("serving at port", PORT)
-            httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
