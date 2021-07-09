@@ -4,8 +4,8 @@ import multiprocessing
 
 from ..utils import get_logger, get_free_port
 
-class RTCP:
 
+class RTCP:
     TIME_ANNOUNCE = 215
 
     def __init__(self, data):
@@ -17,9 +17,10 @@ class RTCP:
 
         if self.ptype == RTCP.TIME_ANNOUNCE:
             self.rtpTimeRemote = struct.unpack(">I", data[4:8])[0]
-            self.net = struct.unpack(">Q", data[8:16])[0] / 10**9
+            self.net = struct.unpack(">Q", data[8:16])[0] / 10 ** 9
             self.rtpTime = struct.unpack(">I", data[16:20])[0]
             self.net_base = struct.unpack(">Q", data[20:28])[0]
+
 
 class Control:
     def __init__(self):
@@ -27,9 +28,11 @@ class Control:
 
     def handle(self, rtcp):
         if rtcp.ptype == RTCP.TIME_ANNOUNCE:
-            self.logger.debug("Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)" % (rtcp.rtpTimeRemote, rtcp.rtpTime, rtcp.net, rtcp.net_base))
+            self.logger.debug("Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)" % (
+            rtcp.rtpTimeRemote, rtcp.rtpTime, rtcp.net, rtcp.net_base))
         else:
-            self.logger.debug("vs=%d pad=%d cn=%d type=%d len=%d ssync=%d" % (rtcp.version, rtcp.padding, rtcp.count, rtcp.ptype, rtcp.plen, rtcp.syncs))
+            self.logger.debug("vs=%d pad=%d cn=%d type=%d len=%d ssync=%d" % (
+            rtcp.version, rtcp.padding, rtcp.count, rtcp.ptype, rtcp.plen, rtcp.syncs))
 
     def serve(self):
         self.logger = get_logger("control", level="DEBUG")
@@ -54,4 +57,3 @@ class Control:
         p = multiprocessing.Process(target=control.serve)
         p.start()
         return control.port, p
-
