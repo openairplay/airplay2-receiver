@@ -135,3 +135,7 @@ dmypy.json
 /.idea/modules.xml
 /.idea/airplay2-receiver-lewdneko.iml
 /.idea/.gitignore
+
+# DXXP Related Files
+artwork*
+events.bin
