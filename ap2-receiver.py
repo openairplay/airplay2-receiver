@@ -758,7 +758,7 @@ if __name__ == "__main__":
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 print("serving at port", PORT)
                 httpd.serve_forever()
-        else: #i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
+        else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
                 print("serving at port", PORT)
                 httpd.serve_forever()
