@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# JetBrains IntelliJ Ultimate
+/.idea/misc.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/vcs.xml
+/.idea/modules.xml
+/.idea/airplay2-receiver-lewdneko.iml
+/.idea/.gitignore
