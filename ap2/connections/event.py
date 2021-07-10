@@ -3,6 +3,7 @@ import multiprocessing
 
 from ..utils import get_logger, get_free_port
 
+
 class Event:
     def __init__(self):
         self.port = get_free_port()
@@ -16,7 +17,7 @@ class Event:
 
         conn, addr = sock.accept()
         self.logger.debug("Connection open from %s:%d" % addr)
-        event_file = open("./events.bin","wb")
+        event_file = open("./events.bin", "wb")
         try:
             while True:
                 data = conn.recv(1)
@@ -35,4 +36,3 @@ class Event:
         p = multiprocessing.Process(target=event.serve)
         p.start()
         return event.port, p
-    

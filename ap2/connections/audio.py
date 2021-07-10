@@ -104,7 +104,11 @@ class RTPBuffer:
         else:
             buffered_object = self.buffer_array[self.read_index]
             if self.read_index % 1000 == 0:
-                print("buffer: reading - full at %s - ri=%i - wi=%i - seq=%i" % ("{:.1%}".format(self.get_fullness()), self.read_index, self.write_index,buffered_object.sequence_no))
+                print("buffer: reading - full at %s - ri=%i - wi=%i - seq=%i"
+                      % ("{:.1%}".format(self.get_fullness()),
+                          self.read_index,
+                          self.write_index,
+                          buffered_object.sequence_no))
 
             if self.increment_index(self.read_index) == self.write_index:
                 # buffer underrun, nothing we can do
@@ -129,24 +133,24 @@ class RTPBuffer:
     def find_seq(self, seq):
         # do binary search. Bin = O(log n) vs linear O(n)
         # here we iterate max several times
-        l = self.read_index
-        r = self.write_index  # len(self.buffer_array) - 1
+        left = self.read_index
+        right = self.write_index
 
-        if l == -1:
+        if left == -1:
             return
-        if l == r:
+        if left == right:
             return
 
-        while l <= r:
-            m = (l + r // 2) % self.BUFFER_SIZE
-            # print('searching l=%d, r=%d, m=%d, srch=%d, now_at=%d' % \
-            # (l, r, m, seq, self.buffer_array_seqs[m] ))
+        while left <= right:
+            m = (left + right // 2) % self.BUFFER_SIZE
+            # print('searching left=%d, right=%d, m=%d, srch=%d, now_at=%d' % \
+            # (left, right, m, seq, self.buffer_array_seqs[m] ))
             if self.buffer_array_seqs[m] == seq:
                 return m
             if self.buffer_array_seqs[m] < seq:
-                l = self.increment_index(m)
+                left = self.increment_index(m)
             elif self.buffer_array_seqs[m] > seq:
-                l = self.decrement_index(m)
+                left = self.decrement_index(m)
 
     # initialize buffer for reading
     def init(self):
@@ -203,7 +207,7 @@ class Audio:
         self.channel_count = 2
         self.af = af = str(Audio.AudioFormat(audio_format))
 
-        if  '8000'  in af:
+        if '8000' in af:
             self.sample_rate = 8000
         elif'16000' in af:
             self.sample_rate = 16000
@@ -215,24 +219,22 @@ class Audio:
             self.sample_rate = 44100
         elif'48000' in af:
             self.sample_rate = 48000
-        else: #default
+        else:  # default
             self.sample_rate = 44100
 
-        if  '_16'   in af:
+        if '_16' in af:
             self.sample_size = 16
-        elif'_24'   in af:
+        elif'_24' in af:
             self.sample_size = 24
         else:  # default
             self.sample_size = 16
 
-        if  af.endswith('_1'):
+        if af.endswith('_1'):
             self.channel_count = 1
         else:
             self.channel_count = 2
 
         print("Negotiated audio format: ", Audio.AudioFormat(audio_format))
-    #
-
 
     def __init__(self, session_key, audio_format, buff_size):
         self.audio_format = audio_format
@@ -280,12 +282,11 @@ class Audio:
         elif self.audio_format == Audio.AudioFormat.ALAC_48000_24_2.value:
             extradata = self.set_alac_extradata(self, 48000, 24, 2)
 
-
-        if  'ALAC'  in self.af:
+        if 'ALAC' in self.af:
             self.codec = av.codec.Codec('alac', 'r')
-        elif'AAC'   in self.af:
+        elif'AAC' in self.af:
             self.codec = av.codec.Codec('aac', 'r')
-        elif'OPUS'   in self.af:
+        elif'OPUS' in self.af:
             self.codec = av.codec.Codec('opus', 'r')
         # PCM
         elif'PCM' and '_16_' in self.af:
@@ -312,7 +313,7 @@ class Audio:
             self.codecContext.extradata = extradata
 
         self.resampler = av.AudioResampler(
-            format=av.AudioFormat('s' + str(self.sample_size) ).packed,
+            format=av.AudioFormat('s' + str(self.sample_size)).packed,
             layout='stereo',
             rate=self.sample_rate,
         )
@@ -334,11 +335,13 @@ class Audio:
         return data
 
     def handle(self, rtp):
-        self.logger.debug("v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d" % (rtp.version, rtp.padding,
-             rtp.extension, rtp.csrc_count,
-             rtp.marker, rtp.payload_type,
-             rtp.sequence_no, rtp.timestamp,
-             rtp.ssrc))
+        self.logger.debug(
+            "v=%d p=%d x=%d cc=%d m=%d pt=%d seq=%d ts=%d ssrc=%d"
+            % (rtp.version, rtp.padding,
+                rtp.extension, rtp.csrc_count,
+                rtp.marker, rtp.payload_type,
+                rtp.sequence_no, rtp.timestamp,
+                rtp.ssrc))
 
     def process(self, rtp):
         data = self.decrypt(rtp)
@@ -351,7 +354,7 @@ class Audio:
         # This pipe is between player (read data) and server (write data)
         parent_writer_connection, writer_connection = multiprocessing.Pipe()
         server_thread = threading.Thread(target=self.serve, args=(writer_connection,))
-        player_thread = threading.Thread(target=self.play, args=(parent_reader_connection,parent_writer_connection))
+        player_thread = threading.Thread(target=self.play, args=(parent_reader_connection, parent_writer_connection))
 
         server_thread.start()
         player_thread.start()
@@ -425,7 +428,6 @@ class AudioBuffered(Audio):
 
         return res
 
-
     def forward(self, requested_timestamp):
         finished = False
         while not finished:
@@ -440,7 +442,7 @@ class AudioBuffered(Audio):
                 print("player: !!! error while forwarding !!!")
                 finished = True
 
-    # player moves readindex in buffer 
+    # player moves readindex in buffer
     def play(self, rtspconn, serverconn):
         playing = False
         data_ready = False
@@ -502,7 +504,7 @@ class AudioBuffered(Audio):
                     if time_offset_ms >= (self.sample_delay * 1000):
                         # print("player: offset %i ms too big - seq = %i - sleeping %s sec" % (time_offset_ms, rtp.sequence_no, "{:05.2f}".format(time_offset_ms /1000)))
                         # time.sleep(time_offset_ms / 1000)
-                        time.sleep( (self.sample_delay / 2) - 0.001 )
+                        time.sleep((self.sample_delay / 2) - 0.001)
                     elif time_offset_ms < -100:
                         print("player: offset %i ms too low - seq = %i - sending ontime data request" % (time_offset_ms, rtp.sequence_no))
                         # request on_time data message

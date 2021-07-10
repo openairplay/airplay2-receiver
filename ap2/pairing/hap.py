@@ -13,6 +13,7 @@ from Crypto.Cipher import ChaCha20_Poly1305
 
 from . import srp
 
+
 class PairingMethod:
     PAIR_SETUP = b'\x00'
     PAIR_SETUP_AUTH = b'\x01'
@@ -20,6 +21,7 @@ class PairingMethod:
     ADD_PAIRING = b'\x03'
     REMOVE_PAIRING = b'\x04'
     LIST_PAIRINGS = b'\x05'
+
 
 class PairingErrors:
     RESERVED = 0
@@ -31,8 +33,10 @@ class PairingErrors:
     UNAVAILABLE = 6
     BUSY = 7
 
+
 class PairingFlags:
     TRANSIENT = b'\x10'
+
 
 class PairingState:
     M1 = b'\x01'
@@ -41,6 +45,7 @@ class PairingState:
     M4 = b'\x04'
     M5 = b'\x05'
     M6 = b'\x06'
+
 
 class Tlv8:
     class Tag:
@@ -67,8 +72,8 @@ class Tlv8:
         ptr = 0
         while ptr < len(req):
             tag = req[ptr]
-            length = req[ptr+1]
-            value = req[ptr+2:ptr+2+length]
+            length = req[ptr + 1]
+            value = req[ptr + 2:ptr + 2 + length]
             # print("dec tag=%d length=%d value=%s" % (tag, length, value.hex()))
             if tag in res:
                 res[tag] = res[tag] + value
@@ -83,7 +88,7 @@ class Tlv8:
         res = b""
         for i in range(0, len(req), 2):
             tag = req[i]
-            value = req[i+1]
+            value = req[i + 1]
             length = len(value)
 
             # print("enc tag=%d length=%d value=%s" % (tag, length, value.hex()))
@@ -91,11 +96,12 @@ class Tlv8:
                 res += bytes([tag]) + bytes([length]) + value
             else:
                 for i in range(0, length // 255):
-                    res += bytes([tag]) + b"\xff" + value[i*255:(i+1)*255]
+                    res += bytes([tag]) + b"\xff" + value[i * 255:(i + 1) * 255]
                 left = length % 255
                 res += bytes([tag]) + bytes([left]) + value[-left:]
 
         return res
+
 
 class Hap:
     def __init__(self):
@@ -144,15 +150,16 @@ class Hap:
             self.encrypted = True
         return Tlv8.encode(res)
 
-
     def pair_setup_m1_m2(self):
         self.ctx = srp.SRPServer(b"Pair-Setup", b"3939")
         server_public = self.ctx.public_key
         salt = self.ctx.salt
 
-        return [ Tlv8.Tag.STATE, PairingState.M2,
-                 Tlv8.Tag.SALT, salt,
-                 Tlv8.Tag.PUBLICKEY, server_public ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+            Tlv8.Tag.SALT, salt,
+            Tlv8.Tag.PUBLICKEY, server_public
+        ]
 
     def pair_setup_m3_m4(self, client_public, client_proof):
         self.ctx.set_client_public(client_public)
@@ -161,8 +168,10 @@ class Hap:
         self.accessory_shared_key = self.ctx.session_key
         server_proof = self.ctx.proof
 
-        return [ Tlv8.Tag.STATE, PairingState.M4,
-                 Tlv8.Tag.PROOF, server_proof ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M4,
+            Tlv8.Tag.PROOF, server_proof
+        ]
 
     def pair_setup_m5_m6(self, encrypted):
         print("-----\tPair-Setup [3/5]")
@@ -172,8 +181,10 @@ class Hap:
         print("-----\tPair-Setup [5/5]")
         enc_tlv, tag = self.pair_setup_m5_m6_3(session_key)
 
-        return [ Tlv8.Tag.STATE, PairingState.M6,
-                 Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M6,
+            Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag
+        ]
 
     def pair_setup_m5_m6_1(self, encrypted):
         prk = hkdf.hkdf_extract(b"Pair-Setup-Encrypt-Salt", self.ctx.session_key)
@@ -210,32 +221,35 @@ class Hap:
         accessory_signed = self.accessory_ltsk.sign(accessory_info)
         accessory_sig = accessory_signed.signature
 
-        dec_tlv = Tlv8.encode([ Tlv8.Tag.IDENTIFIER, self.accessory_id,
-                                Tlv8.Tag.PUBLICKEY, self.accessory_ltpk,
-                                Tlv8.Tag.SIGNATURE, accessory_sig ])
+        dec_tlv = Tlv8.encode([
+            Tlv8.Tag.IDENTIFIER, self.accessory_id,
+            Tlv8.Tag.PUBLICKEY, self.accessory_ltpk,
+            Tlv8.Tag.SIGNATURE, accessory_sig
+        ])
 
         c = ChaCha20_Poly1305.new(key=session_key, nonce=b"PS-Msg06")
         enc_tlv, tag = c.encrypt_and_digest(dec_tlv)
 
         return enc_tlv, tag
 
-
     def pair_verify_m1_m2(self, client_public):
         self.client_curve_public = client_public
 
         self.accessory_curve = x25519.X25519PrivateKey.generate()
         self.accessory_curve_public = self.accessory_curve.public_key().public_bytes(
-        encoding=serialization.Encoding.Raw,
-        format=serialization.PublicFormat.Raw
-    )
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
         self.accessory_shared_key = self.accessory_curve.exchange(x25519.X25519PublicKey.from_public_bytes(client_public))
 
         accessory_info = self.accessory_curve_public + self.accessory_id + client_public
         accessory_signed = self.accessory_ltsk.sign(accessory_info)
         accessory_sig = accessory_signed.signature
 
-        sub_tlv = Tlv8.encode([ Tlv8.Tag.IDENTIFIER, self.accessory_id,
-                                Tlv8.Tag.SIGNATURE, accessory_sig ])
+        sub_tlv = Tlv8.encode([
+            Tlv8.Tag.IDENTIFIER, self.accessory_id,
+            Tlv8.Tag.SIGNATURE, accessory_sig
+        ])
 
         prk = hkdf.hkdf_extract(b"Pair-Verify-Encrypt-Salt", self.accessory_shared_key)
         session_key = hkdf.hkdf_expand(prk, b"Pair-Verify-Encrypt-Info", 32)
@@ -243,9 +257,11 @@ class Hap:
         c = ChaCha20_Poly1305.new(key=session_key, nonce=b"PV-Msg02")
         enc_tlv, tag = c.encrypt_and_digest(sub_tlv)
 
-        return [ Tlv8.Tag.STATE, PairingState.M2,
-                 Tlv8.Tag.PUBLICKEY, self.accessory_curve_public,
-                 Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+            Tlv8.Tag.PUBLICKEY, self.accessory_curve_public,
+            Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag
+        ]
 
     def pair_verify_m3_m4(self, encrypted):
         prk = hkdf.hkdf_extract(b"Pair-Verify-Encrypt-Salt", self.accessory_shared_key)
@@ -264,7 +280,9 @@ class Hap:
         verify_key = nacl.signing.VerifyKey(self.device_ltpk)
         verify_key.verify(device_info, device_sig)
 
-        return [ Tlv8.Tag.STATE, PairingState.M4 ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M4
+        ]
 
 
 #
