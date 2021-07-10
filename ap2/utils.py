@@ -5,7 +5,12 @@ import platform
 import subprocess
 
 if platform.system() == "Windows":
-    from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+    try:
+        from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+    except ImportError:
+        AudioUtilities = None
+        ISimpleAudioVolume = None
+        print('[!] Pycaw is not installed - volume control will be unavailable', )
 
 def get_logger(name, level="INFO"):
     logging.basicConfig(filename="%s.log" % name,
@@ -43,7 +48,7 @@ def interpolate(value, from_min, from_max, to_min, to_max):
     return to_min + (value_scale * to_span)
 
 def get_pycaw_volume_session():
-    if platform.system() != 'Windows':
+    if platform.system() != 'Windows' or AudioUtilities is None:
         return
     session = None
     for s in AudioUtilities.GetAllSessions():

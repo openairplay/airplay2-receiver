@@ -80,7 +80,7 @@ virtualenv airplay2-receiver
 cd airplay2-receiver
 .\Scripts\activate
 pip install -r requirements.txt
-pip install pipwin
+pip install pipwin pycaw
 pipwin install pyaudio
 
 python ap2-receiver.py -m myap2 -n [YOUR_INTERFACE_GUID] (looks like this for instance {02681AC0-AD52-4E15-9BD6-8C6A08C4F836} )
