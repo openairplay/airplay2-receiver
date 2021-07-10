@@ -544,9 +544,7 @@ class AudioBuffered(Audio):
                     playing = False
                     data_ready = False
                     print("pause event")
-                    if self.use_callback:
-                        print("  stopping stream")
-                        self.sink.stop_stream()
+                    self.sink.stop_stream()
 
                 elif str.startswith(message, "flush_from_until_seq"):
                     pending_flush_from_seq, pending_flush_until_seq = str.split(
