@@ -702,6 +702,7 @@ class PTP():
 
         self.network_time_ns = 0
         self.network_time_monotonic_ts = time.monotonic_ns()
+        self.max_error = 1 * (10 ** 6) # 1 millisecond
 
     def promoteMaster(self, ptpmsg, reason):
         self.gm = PTPMaster(ptpmsg)
@@ -839,8 +840,29 @@ class PTP():
             self.PTPcorrection = abs(self.meanPathDelayNanos) / (10**9)
             # print(f"Current mean path delay (sec): {self.PTPcorrection:.09f}")
 
-            self.network_time_ns = t4 + self.meanPathDelayNanos
-            self.network_time_monotonic_ts = time.monotonic_ns()
+
+            # store in self.network_time_ns and self.network_time_monotonic_ts the current network time
+            # and the time the 'fixed' network time is retrieved, so we can calculate network time at any time
+
+            # try to filter out invalid values
+            network_time_ns = t4 + self.meanPathDelayNanos
+            network_time_monotonic_ts = time.monotonic_ns()
+
+            # what time would be now if we need to calculate it?
+            previous_network_time = self.network_time_ns + (network_time_monotonic_ts - self.network_time_monotonic_ts)
+            # the error is the difference between calculated time from previous ptp sync and the current ptp sync
+            error = (previous_network_time - network_time_ns) / (10 ** 6)
+
+            if abs(error) < self.max_error or self.network_time_ns == 0:
+                if (abs(error) > 10):
+                    print(f'updated time error {error} less than {self.max_error} ms')
+                self.network_time_ns = network_time_ns
+                self.network_time_monotonic_ts = network_time_monotonic_ts
+                self.max_error = 2 # millisecond
+            else:
+                #print(f'skip update time error {error} bigger than {self.max_error} ms')
+                # grow error so an update happens
+                self.max_error = self.max_error * 1.2
 
             """
             # This Q builds a sliding avg of all MPDs.
@@ -1192,10 +1214,11 @@ class PTP():
         try:
             while True:
                 if conn.poll():
-                    if(conn.recv() == 'get_ptp_master_correction'):
+                    msg = conn.recv()
+                    if (msg == 'get_ptp_master_correction'):
                         conn.send(self.get_ptp_master_correction())
-                    if(conn.recv() == 'get_ptp_master_nanos'):
-                        conn.send(self.get_ptp_master_nanos())
+                    if (msg == 'get_ptp_master_nanos_timestamped'):
+                        conn.send([self.network_time_ns, self.network_time_monotonic_ts])
 
         except KeyboardInterrupt:
             pass

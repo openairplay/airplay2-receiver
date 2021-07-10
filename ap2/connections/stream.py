@@ -3,13 +3,12 @@ import multiprocessing
 from .control import Control
 from .audio import AudioRealtime, AudioBuffered
 
-
 class Stream:
 
     REALTIME = 96
     BUFFERED = 103
 
-    def __init__(self, stream, buff):
+    def __init__(self, stream, buff, ptp_link):
         self.audio_format = stream["audioFormat"]
         self.compression = stream["ct"]
         self.session_key = stream["shk"]
@@ -24,7 +23,7 @@ class Stream:
             self.latency_max = stream["latencyMax"]
             self.data_port, self.data_proc, audio_connection = AudioRealtime.spawn(self.session_key, self.audio_format, buff)
         elif self.type == Stream.BUFFERED:
-            self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(self.session_key, self.audio_format, buff)
+            self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(self.session_key, self.audio_format, buff, ptp_link)
 
     def teardown(self):
         self.data_proc.terminate()
