@@ -119,4 +119,3 @@ class SRPServer():
             raise Exception("Authentication failed - invalid proof")
         self.M2 = H(self.A, self.M1, self.K)
         return True
-

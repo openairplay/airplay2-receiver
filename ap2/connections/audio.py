@@ -105,8 +105,11 @@ class RTPBuffer:
         else:
             buffered_object = self.buffer_array[self.read_index]
             if self.read_index % 1000 == 0:
-                print("buffer: reading - full at %s - ri=%i - wi=%i - seq=%i" % (
-                "{:.1%}".format(self.get_fullness()), self.read_index, self.write_index, buffered_object.sequence_no))
+                print("buffer: reading - full at %s - ri=%i - wi=%i - seq=%i"
+                      % ("{:.1%}".format(self.get_fullness()),
+                          self.read_index,
+                          self.write_index,
+                          buffered_object.sequence_no))
 
             if self.increment_index(self.read_index) == self.write_index:
                 # buffer underrun, nothing we can do
@@ -131,24 +134,24 @@ class RTPBuffer:
     def find_seq(self, seq):
         # do binary search. Bin = O(log n) vs linear O(n)
         # here we iterate max several times
-        l = self.read_index
-        r = self.write_index  # len(self.buffer_array) - 1
+        left = self.read_index
+        right = self.write_index
 
-        if l == -1:
+        if left == -1:
             return
-        if l == r:
+        if left == right:
             return
 
-        while l <= r:
-            m = (l + r // 2) % self.BUFFER_SIZE
-            # print('searching l=%d, r=%d, m=%d, srch=%d, now_at=%d' % \
-            # (l, r, m, seq, self.buffer_array_seqs[m] ))
+        while left <= right:
+            m = (left + right // 2) % self.BUFFER_SIZE
+            # print('searching left=%d, right=%d, m=%d, srch=%d, now_at=%d' % \
+            # (left, right, m, seq, self.buffer_array_seqs[m] ))
             if self.buffer_array_seqs[m] == seq:
                 return m
             if self.buffer_array_seqs[m] < seq:
-                l = self.increment_index(m)
+                left = self.increment_index(m)
             elif self.buffer_array_seqs[m] > seq:
-                l = self.decrement_index(m)
+                left = self.decrement_index(m)
 
     # initialize buffer for reading
     def init(self):
@@ -438,7 +441,7 @@ class AudioBuffered(Audio):
                 print("player: !!! error while forwarding !!!")
                 finished = True
 
-    # player moves readindex in buffer 
+    # player moves readindex in buffer
     def play(self, rtspconn, serverconn):
         playing = False
         data_ready = False

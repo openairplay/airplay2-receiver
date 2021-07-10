@@ -155,9 +155,11 @@ class Hap:
         server_public = self.ctx.public_key
         salt = self.ctx.salt
 
-        return [Tlv8.Tag.STATE, PairingState.M2,
-                Tlv8.Tag.SALT, salt,
-                Tlv8.Tag.PUBLICKEY, server_public]
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+            Tlv8.Tag.SALT, salt,
+            Tlv8.Tag.PUBLICKEY, server_public
+        ]
 
     def pair_setup_m3_m4(self, client_public, client_proof):
         self.ctx.set_client_public(client_public)
@@ -166,8 +168,10 @@ class Hap:
         self.accessory_shared_key = self.ctx.session_key
         server_proof = self.ctx.proof
 
-        return [Tlv8.Tag.STATE, PairingState.M4,
-                Tlv8.Tag.PROOF, server_proof]
+        return [
+            Tlv8.Tag.STATE, PairingState.M4,
+            Tlv8.Tag.PROOF, server_proof
+        ]
 
     def pair_setup_m5_m6(self, encrypted):
         print("-----\tPair-Setup [3/5]")
@@ -177,8 +181,10 @@ class Hap:
         print("-----\tPair-Setup [5/5]")
         enc_tlv, tag = self.pair_setup_m5_m6_3(session_key)
 
-        return [Tlv8.Tag.STATE, PairingState.M6,
-                Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag]
+        return [
+            Tlv8.Tag.STATE, PairingState.M6,
+            Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag
+        ]
 
     def pair_setup_m5_m6_1(self, encrypted):
         prk = hkdf.hkdf_extract(b"Pair-Setup-Encrypt-Salt", self.ctx.session_key)
@@ -215,9 +221,11 @@ class Hap:
         accessory_signed = self.accessory_ltsk.sign(accessory_info)
         accessory_sig = accessory_signed.signature
 
-        dec_tlv = Tlv8.encode([Tlv8.Tag.IDENTIFIER, self.accessory_id,
-                               Tlv8.Tag.PUBLICKEY, self.accessory_ltpk,
-                               Tlv8.Tag.SIGNATURE, accessory_sig])
+        dec_tlv = Tlv8.encode([
+            Tlv8.Tag.IDENTIFIER, self.accessory_id,
+            Tlv8.Tag.PUBLICKEY, self.accessory_ltpk,
+            Tlv8.Tag.SIGNATURE, accessory_sig
+        ])
 
         c = ChaCha20_Poly1305.new(key=session_key, nonce=b"PS-Msg06")
         enc_tlv, tag = c.encrypt_and_digest(dec_tlv)
@@ -232,15 +240,16 @@ class Hap:
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
         )
-        self.accessory_shared_key = self.accessory_curve.exchange(
-            x25519.X25519PublicKey.from_public_bytes(client_public))
+        self.accessory_shared_key = self.accessory_curve.exchange(x25519.X25519PublicKey.from_public_bytes(client_public))
 
         accessory_info = self.accessory_curve_public + self.accessory_id + client_public
         accessory_signed = self.accessory_ltsk.sign(accessory_info)
         accessory_sig = accessory_signed.signature
 
-        sub_tlv = Tlv8.encode([Tlv8.Tag.IDENTIFIER, self.accessory_id,
-                               Tlv8.Tag.SIGNATURE, accessory_sig])
+        sub_tlv = Tlv8.encode([
+            Tlv8.Tag.IDENTIFIER, self.accessory_id,
+            Tlv8.Tag.SIGNATURE, accessory_sig
+        ])
 
         prk = hkdf.hkdf_extract(b"Pair-Verify-Encrypt-Salt", self.accessory_shared_key)
         session_key = hkdf.hkdf_expand(prk, b"Pair-Verify-Encrypt-Info", 32)
@@ -248,9 +257,11 @@ class Hap:
         c = ChaCha20_Poly1305.new(key=session_key, nonce=b"PV-Msg02")
         enc_tlv, tag = c.encrypt_and_digest(sub_tlv)
 
-        return [Tlv8.Tag.STATE, PairingState.M2,
-                Tlv8.Tag.PUBLICKEY, self.accessory_curve_public,
-                Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag]
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+            Tlv8.Tag.PUBLICKEY, self.accessory_curve_public,
+            Tlv8.Tag.ENCRYPTEDDATA, enc_tlv + tag
+        ]
 
     def pair_verify_m3_m4(self, encrypted):
         prk = hkdf.hkdf_extract(b"Pair-Verify-Encrypt-Salt", self.accessory_shared_key)
@@ -269,7 +280,9 @@ class Hap:
         verify_key = nacl.signing.VerifyKey(self.device_ltpk)
         verify_key.verify(device_info, device_sig)
 
-        return [Tlv8.Tag.STATE, PairingState.M4]
+        return [
+            Tlv8.Tag.STATE, PairingState.M4
+        ]
 
 
 #

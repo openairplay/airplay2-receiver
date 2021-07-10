@@ -177,21 +177,26 @@ def setup_global_structs(args):
     sonos_one_info = {
         # 'OSInfo': 'Linux 3.10.53',
         # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
-        'audioLatencies': [{'inputLatencyMicros': 0,
-                            'outputLatencyMicros': 400000,
-                            'type': 100},
-                           {'audioType': 'default',
-                            'inputLatencyMicros': 0,
-                            'outputLatencyMicros': 400000,
-                            'type': 100},
-                           {'audioType': 'media',
-                            'inputLatencyMicros': 0,
-                            'outputLatencyMicros': 400000,
-                            'type': 100},
-                           {'audioType': 'media',
-                            'inputLatencyMicros': 0,
-                            'outputLatencyMicros': 400000,
-                            'type': 102}],
+        'audioLatencies': [{
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'default',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'media',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 100},
+                           {
+                           'audioType': 'media',
+                           'inputLatencyMicros': 0,
+                           'outputLatencyMicros': 400000,
+                           'type': 102
+                           }],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
         'features': FEATURES,
@@ -225,8 +230,11 @@ def setup_global_structs(args):
         'eventPort': 0,  # AP2 receiver event server
         'timingPort': 0,
         'timingPeerInfo': {
-            'Addresses': [
-                IPV4, IPV6],
+            'Addresses':
+            [
+                IPV4,
+                IPV6
+            ],
             'ID': IPV4}
     }
 
@@ -300,8 +308,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
-        self.send_header("Public",
-                         "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT")
+        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT")
         self.end_headers()
 
     def do_FLUSHBUFFERED(self):
@@ -749,11 +756,15 @@ def register_mdns(receiver_name):
     for ifen in ni.interfaces():
         ifenaddr = ni.ifaddresses(ifen)
         if ni.AF_INET in ifenaddr:
-            addresses.append(socket.inet_pton(ni.AF_INET,
-                                              ifenaddr[ni.AF_INET][0]["addr"]))
+            addresses.append(socket.inet_pton(
+                ni.AF_INET,
+                ifenaddr[ni.AF_INET][0]["addr"])
+            )
         if ni.AF_INET6 in ifenaddr:
-            addresses.append(socket.inet_pton(ni.AF_INET6,
-                                              ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0]))
+            addresses.append(socket.inet_pton(
+                ni.AF_INET6,
+                ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0])
+            )
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
@@ -769,6 +780,7 @@ def register_mdns(receiver_name):
     zeroconf.register_service(info)
     print("mDNS service registered")
     return zeroconf, info
+
 
 
 def unregister_mdns(zeroconf, info):

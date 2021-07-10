@@ -6,11 +6,13 @@ import subprocess
 
 
 def get_logger(name, level="INFO"):
-    logging.basicConfig(filename="%s.log" % name,
-                        filemode='a',
-                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%H:%M:%S',
-                        level=level)
+    logging.basicConfig(
+        filename="%s.log" % name,
+        filemode='a',
+        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+        level=level
+    )
     return logging.getLogger(name)
 
 

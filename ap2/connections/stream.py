@@ -3,6 +3,7 @@ import multiprocessing
 from .control import Control
 from .audio import AudioRealtime, AudioBuffered
 
+
 class Stream:
 
     REALTIME = 96
