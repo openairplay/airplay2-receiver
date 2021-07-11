@@ -130,3 +130,5 @@ dmypy.json
 
 artwork*
 events.bin
+
+.vscode/*
