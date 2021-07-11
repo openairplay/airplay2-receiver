@@ -13,7 +13,7 @@ if platform.system() == "Windows":
         ISimpleAudioVolume = None
         print('[!] Pycaw is not installed - volume control will be unavailable', )
 
-        
+
 def get_logger(name, level="INFO"):
     logging.basicConfig(
         filename="%s.log" % name,
@@ -55,21 +55,27 @@ def interpolate(value, from_min, from_max, to_min, to_max):
 
     return to_min + (value_scale * to_span)
 
-  
+
+audio_pid = 0
+
+def set_volume_pid(pid):
+    global audio_pid
+    audio_pid = pid
+
 def get_pycaw_volume_session():
     if platform.system() != 'Windows' or AudioUtilities is None:
         return
     session = None
     for s in AudioUtilities.GetAllSessions():
         try:
-            if s.Process.name() == 'python.exe':
+            if s.Process.pid == audio_pid:
                 session = s._ctl.QueryInterface(ISimpleAudioVolume)
                 break
         except AttributeError:
             pass
     return session
 
-  
+
 def get_volume():
     subsys = platform.system()
     if subsys == "Darwin":

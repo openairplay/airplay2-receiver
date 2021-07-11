@@ -20,7 +20,7 @@ from biplist import readPlistFromString, writePlistToString
 
 from ap2.connections.audio import RTPBuffer
 from ap2.playfair import PlayFair
-from ap2.utils import get_volume, set_volume
+from ap2.utils import get_volume, set_volume, set_volume_pid
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
 from ap2.connections.stream import Stream
@@ -401,6 +401,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     print("Sending CONTROL/DATA:")
                     buff = 8388608  # determines how many CODEC frame size 1024 we can hold
                     stream = Stream(plist["streams"][0], buff)
+                    set_volume_pid(stream.data_proc.pid)
                     self.server.streams.append(stream)
                     sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
                     sonos_one_setup_data["streams"][0]["dataPort"] = stream.data_port
