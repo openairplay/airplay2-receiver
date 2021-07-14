@@ -127,8 +127,6 @@ class Feat(IntFlag):
     """
     Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
      iOS just fails at Pair-Setup [2/5]
-    Ft52: triggers on iOS:
-     code 501, message Unsupported method ('SETPEERSX')
     """
 
 
@@ -302,6 +300,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         else:
             print("GET %s Not implemented!" % self.path)
             self.send_error(404)
+            # iDevice gives up, tears down the HAP connection; close ours.
+            self.server.hap = None
 
     def do_OPTIONS(self):
         print(self.headers)
@@ -309,7 +309,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
-        self.send_header("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT")
+        self.send_header("Public",
+                         "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH"
+                         "FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT"
+                         "SETPEERSX"
+                         )
         self.end_headers()
 
     def do_FLUSHBUFFERED(self):
@@ -368,6 +372,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         else:
             print("POST %s Not implemented!" % self.path)
             self.send_error(404)
+            # iDevice gives up, tears down the HAP connection; close ours.
+            self.server.hap = None
 
     def do_SETUP(self):
         dacp_id = self.headers.get("DACP-ID")
@@ -559,6 +565,37 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def do_SETPEERS(self):
         print("SETPEERS %s" % self.path)
+        print(self.headers)
+        content_len = int(self.headers["Content-Length"])
+        if content_len > 0:
+            body = self.rfile.read(content_len)
+
+            plist = readPlistFromString(body)
+            self.pp.pprint(plist)
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+    def do_SETPEERSX(self):
+        # extended message format for setting PTP clock peers
+        # Requires Ft52PeersExtMsg (bit 52)
+        # Note: this method does not require defining in do_OPTIONS
+
+        # Content-Type: /peer-list-changed-x
+        # Contains [] array of:
+        # {'Addresses': ['fe80::fb:97fb:2fb3:34bc',
+        #         '192.168.19.110'],
+        #   'ClockID': 000000000000000000,
+        #   'ClockPorts': {GUID1: port,
+        #                  GUID2: port,
+        #                  GUIDN: port},
+        #   'DeviceType': 0,
+        #   'ID': GUID,
+        #   'SupportsClockPortMatchingOverride': T/F}
+
+        # SETPEERSX may require more logic when PTP is finished.
+        print("SETPEERSX %s" % self.path)
         print(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
