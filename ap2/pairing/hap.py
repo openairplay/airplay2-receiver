@@ -34,6 +34,11 @@ class PairingErrors:
     BUSY = 7
 
 
+class Permissions:
+    Regular_User = 0
+    Admin_User = 1
+
+
 class PairingFlags:
     TRANSIENT = b'\x10'
 
@@ -154,6 +159,248 @@ class Hap:
             self.encrypted = True
         return Tlv8.encode(res)
 
+    def pair_add(self, req):
+        req = Tlv8.decode(req)
+
+        if(req[Tlv8.Tag.STATE] == PairingState.M1
+           and req[Tlv8.Tag.METHOD] == PairingMethod.ADD_PAIRING
+           and req[Tlv8.Tag.IDENTIFIER]
+           and req[Tlv8.Tag.PUBLICKEY]
+           and req[Tlv8.Tag.PERMISSIONS]):
+            print("-----\tPair-Add [1/1]")
+            res = self.pair_add_m1_m2(req)
+            self.encrypted = True
+        return Tlv8.encode(res)
+
+    def pair_add_m1_m2(self, request_tlv):
+
+        """
+        2. Verify that the controller sending the request has the admin bit set
+         in the local pairings list. If not, accessory must abort and respond
+          with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Authentication
+        """
+
+        # Verify that
+        # local_pairings_list[][Tlv8.Tag.IDENTIFIER]
+        # has:
+        # local_pairings_list[][Tlv8.Tag.PERMISSIONS] == Permissions.Admin_User
+
+        """
+        3. If a pairing for AdditionalControllerPairingIdentifier exists, it
+         must perform the following steps:
+        (a) If the AdditionalControllerLTPK does not match the stored
+         long-term public key for AdditionalControllerPairingIdentifier, respond
+         with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Unknown
+        (b) Update the permissions of the controller to match
+         AdditionalControllerPermissions.
+        """
+
+        # 3 (a)
+        # return [
+        #     Tlv8.Tag.STATE, PairingState.M2,
+        #     Tlv8.Tag.ERROR, PairingErrors.UNKNOWN
+        # ]
+
+        # (b) Look for AdditionalControllerPairingIdentifier in simple .txt file
+        #  Then update its AdditionalControllerPermissions
+
+        # i.e.:
+        # request_tlv[Tlv8.Tag.IDENTIFIER], request_tlv[Tlv8.Tag.PERMISSIONS]
+
+        """
+
+        4. Otherwise, if a pairing for AdditionalControllerPairingIdentifier
+         does not exist, it must perform the following steps:
+        (a) Check if the accessory has space to support an additional pairing;
+         the minimum number of supported pairings is 16 pairings. If not,
+          accessory must abort and respond with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_MaxPeers
+        (b) Save the additional controllerʼs
+         AdditionalControllerPairingIdentifier,
+         AdditionalControllerLTPK and
+         AdditionalControllerPermissions
+         to a persistent store. If an error
+         occurs while saving, accessory must abort and respond with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Unknown
+        """
+        # 4 (a)
+        # return [
+        #     Tlv8.Tag.STATE, PairingState.M2,
+        #     Tlv8.Tag.ERROR, PairingErrors.MAXPEERS
+        # ]
+
+        # Try to write the new AdditionalControllerPairingIdentifier to a simple .txt file
+        # with fields:
+
+        # request_tlv[Tlv8.Tag.IDENTIFIER], request_tlv[Tlv8.Tag.PUBLICKEY], request_tlv[Tlv8.Tag.PERMISSIONS]
+
+        # On Error:
+        # return [
+        #     Tlv8.Tag.STATE, PairingState.M2,
+        #     Tlv8.Tag.ERROR, PairingErrors.UNKNOWN  # Might not be PairingErrors
+        # ]
+
+        """
+
+        5. Construct a response with the following TLV items:
+            kTLVType_State <M2>
+
+        6. Send the response over the HAP session established via ”5.7 Pair Verify” (page 39),
+         which provides bidirectional, authenticated encryption.
+        """
+
+        # Point 5 and 6:
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+        ]
+
+    def pair_remove(self, req):
+        req = Tlv8.decode(req)
+
+        if(req[Tlv8.Tag.STATE] == PairingState.M1
+           and req[Tlv8.Tag.METHOD] == PairingMethod.REMOVE_PAIRING
+           and req[Tlv8.Tag.IDENTIFIER]):
+            print("-----\tPair-Remove [1/1]")
+            res = self.pair_remove_m1_m2(req)
+            self.encrypted = True
+        return Tlv8.encode(res)
+
+    def pair_remove_m1_m2(self, request_tlv):
+
+        """
+        2. Verify that the controller sending the request has the admin bit set
+         in the local pairings list. If not, accessory must abort and respond
+          with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Authentication
+        """
+
+        # Verify that
+        # local_pairings_list[][Tlv8.Tag.IDENTIFIER]
+        # has:
+        # local_pairings_list[][Tlv8.Tag.PERMISSIONS] == Permissions.Admin_User
+
+        """
+        3. If the pairing exists, remove
+         RemovedControllerPairingIdentifier and its corresponding long-term
+         public key from persistent storage. If a pairing for
+         RemovedControllerPairingIdentifier does not exist, the accessory must
+         return success. Otherwise, if an error occurs during removal, accessory
+         must abort and respond with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Unknown
+        """
+
+        # Look for RemovedControllerPairingIdentifier in simple .txt file
+        #  Then remove it
+
+        # i.e.:
+        # request_tlv[Tlv8.Tag.IDENTIFIER]]
+        # if not RemovedControllerPairingIdentifier in local_pairings_list[]
+        # return HAPErrors.NoErr (0)
+        # It seems we just:
+        # return [
+        #     Tlv8.Tag.STATE, PairingState.M2
+        # ]
+
+        # 3 (otherwise...)
+        # return [
+        #     Tlv8.Tag.STATE, PairingState.M2,
+        #     Tlv8.Tag.ERROR, PairingErrors.UNKNOWN
+        # ]
+
+        """
+        4. Construct a response with the following TLV items:
+         kTLVType_State <M2>
+
+        5. Send the response over the HAP session established via ”5.7 Pair Verify” (page 39),
+         which provides bidirectional, authenticated encryption.
+
+        6. If the controller requested the accessory to remove its own pairing
+         the accessory must invalidate the HAP session immediately after the
+         response is sent.
+
+        7. If there are any established HAP sessions with the controller that was
+         removed, then these connections must be immediately torn down and any
+         associated data stream (e.g. RTP, HDS) must be stopped and removed.
+
+        """
+        # TODO: Point 3: the accessory must return success
+        # Point 4 and 5:
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+        ]
+
+    def pair_list(self, req):
+        req = Tlv8.decode(req)
+
+        if(req[Tlv8.Tag.STATE] == PairingState.M1
+           and req[Tlv8.Tag.METHOD] == PairingMethod.LIST_PAIRINGS
+           ):
+            print("-----\tPair-List [1/1]")
+            res = self.pair_list_m1_m2()
+            self.encrypted = True
+        return Tlv8.encode(res)
+
+    def pair_list_m1_m2(self):
+
+        """
+        2. Verify that the controller sending the request has the admin bit set
+         in the local pairings list. If not, abort and respond with the following TLV items:
+            kTLVType_State <M2>
+            kTLVType_Error kTLVError_Authentication
+
+        """
+
+        # Verify that
+        # local_pairings_list[][Tlv8.Tag.IDENTIFIER]
+        # has:
+        # local_pairings_list[][Tlv8.Tag.PERMISSIONS] == Permissions.Admin_User
+
+        """
+        3. Construct a response with the following TLV items:
+
+            kTLVType_State <M2>
+            kTLVType_Identifier <Pairing Identifier of Controller 1>
+            kTLVType_PublicKey <Ed25519 long-term public key of Controller 1>
+            kTLVType_Permissions <Bit value describing permissions of Controller 1>
+
+        If another pairing follows a pairing, it must be separated using a separator item:
+            kTLVType_Separator <No value>
+
+        Additional pairings must contain the following TLV items:
+
+            kTLVType_Identifier <Pairing Identifier of Controller N>
+            kTLVType_PublicKey <Ed25519 long-term public key of Controller N>
+            kTLVType_Permissions <Bit value describing permissions of Controller N>
+        """
+
+        # (b) Look for all PairingIdentifiers in simple .txt file
+        #  Get them, add them to TLV
+
+        """
+        4. Send the response over the HAP session established via ”5.7 Pair Verify” (page 39),
+         which provides bidirectional, authenticated encryption.
+        """
+
+        # Point 4 and 5:
+        return [
+            Tlv8.Tag.STATE, PairingState.M2,
+            Tlv8.Tag.IDENTIFIER,  # ID 1 here
+            Tlv8.Tag.PUBLICKEY,  # LTPK 1 here
+            Tlv8.Tag.PERMISSIONS  # PERMs 1 here
+            # Tlv8.Tag.SEPARATOR,
+            # Tlv8.Tag.IDENTIFIER,  # ID N+1 here
+            # Tlv8.Tag.PUBLICKEY,  # LTPK N+1 here
+            # Tlv8.Tag.PERMISSIONS  # PERMs N+1 here
+        ]
+
     def pair_setup_m1_m2(self):
         self.ctx = srp.SRPServer(b"Pair-Setup", b"3939")
         server_public = self.ctx.public_key
@@ -218,8 +465,6 @@ class Hap:
 
         self.accessory_ltsk = nacl.signing.SigningKey.generate()
         self.accessory_ltpk = bytes(self.accessory_ltsk.verify_key)
-
-        self.accessory_id = b"00000000-0000-0000-0000-f0989d7cbbab"
 
         accessory_info = accessory_x + self.accessory_id + self.accessory_ltpk
         accessory_signed = self.accessory_ltsk.sign(accessory_info)

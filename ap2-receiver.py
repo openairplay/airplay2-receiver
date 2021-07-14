@@ -163,6 +163,10 @@ HTTP_CT_OCTET = "application/octet-stream"
 HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
+HTTP_CT_PAIR = "application/pairing+tlv8"
+HTTP_X_A_HKP = "X-Apple-HKP"
+HTTP_X_A_CN = "X-Apple-Client-Name"
+HTTP_X_A_PD = "X-Apple-PD"
 
 
 def setup_global_structs(args):
@@ -369,6 +373,18 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             print(self.headers)
             print("POST /pair-verify")
             self.handle_pair_verify()
+        elif self.path == "/pair-add":
+            print(self.headers)
+            print("POST /pair-add")
+            self.handle_pairing('add')
+        elif self.path == "/pair-remove":
+            print(self.headers)
+            print("POST /pair-remove")
+            self.handle_pairing('remove')
+        elif self.path == "/pair-list":
+            print(self.headers)
+            print("POST /pair-list")
+            self.handle_pairing('list')
         else:
             print("POST %s Not implemented!" % self.path)
             self.send_error(404)
@@ -738,6 +754,37 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if self.server.hap.encrypted:
             hexdump(self.server.hap.accessory_shared_key)
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+
+    def handle_pairing(self, action):
+        content_len = int(self.headers["Content-Length"])
+
+        body = self.rfile.read(content_len)
+
+        if not self.server.hap:
+            self.server.hap = Hap()
+        if action == 'add':
+            res = self.server.hap.pair_add(body)
+        elif action == 'remove':
+            res = self.server.hap.pair_remove(body)
+        elif action == 'list':
+            res = self.server.hap.pair_list(body)
+
+        self.send_response(200)
+        self.send_header("Content-Length", len(res))
+        self.send_header("Content-Type", HTTP_CT_PAIR)  # or HTTP_CT_OCTET
+        self.send_header("Server", self.version_string())
+        # Additional headers may or may not be required here...
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+        self.wfile.write(res)
+
+        if self.server.hap.encrypted:
+            hexdump(self.server.hap.accessory_shared_key)
+            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+
+        # Remove point 6-7:
+        # if action == 'remove':
+        #     self.server.hap = None
 
     def handle_info(self):
         if "Content-Type" in self.headers:
