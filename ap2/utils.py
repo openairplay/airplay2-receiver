@@ -81,7 +81,7 @@ def get_volume():
     if subsys == "Darwin":
         try:
             pct = int(subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).rstrip())
-        except:
+        except ValueError:
             pct = 0
         vol = interpolate(pct, 0, 100, -30, 0)
     elif subsys == "Linux":
