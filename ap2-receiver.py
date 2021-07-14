@@ -481,7 +481,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         elif content_type == HTTP_CT_IMAGE:
             if content_len > 0:
                 fname = None
-                with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False) as f:
+                with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False, suffix=".jpg") as f:
                     f.write(self.rfile.read(content_len))
                     fname = f.name
                 print("Artwork saved to %s" % fname)
