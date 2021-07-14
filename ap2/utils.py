@@ -79,7 +79,10 @@ def get_pycaw_volume_session():
 def get_volume():
     subsys = platform.system()
     if subsys == "Darwin":
-        pct = int(subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).rstrip())
+        try:
+            pct = int(subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).rstrip())
+        except ValueError:
+            pct = 0
         vol = interpolate(pct, 0, 100, -30, 0)
     elif subsys == "Linux":
         line_pct = subprocess.check_output(["amixer", "get", "PCM"]).splitlines()[-1]
