@@ -519,15 +519,19 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         print(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                body = self.rfile.read(content_len)
+            try:
+                if content_len > 0:
+                    body = self.rfile.read(content_len)
 
-                plist = readPlistFromString(body)
-                if plist["rate"] == 1:
-                    self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
-                if plist["rate"] == 0:
-                    self.server.streams[0].audio_connection.send("pause")
-                self.pp.pprint(plist)
+                    plist = readPlistFromString(body)
+                    if plist["rate"] == 1:
+                        self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
+                    if plist["rate"] == 0:
+                        self.server.streams[0].audio_connection.send("pause")
+                    self.pp.pprint(plist)
+            except IndexError:
+                # Fixes some disconnects
+                print('Cannot process request; streams torn down already.')
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])

@@ -382,9 +382,12 @@ class HAPSocket:
                 if buflen < self.LENGTH_LENGTH:
                     return result
 
-                block_length_bytes = self.socket.recv(self.LENGTH_LENGTH)
-                if not block_length_bytes:
-                    return result
+                try:
+                    block_length_bytes = self.socket.recv(self.LENGTH_LENGTH)
+                    if not block_length_bytes:
+                        return result
+                except ConnectionResetError:
+                    print('HAP connection destroyed (unexpectedly).')
 
                 assert len(block_length_bytes) == self.LENGTH_LENGTH
 
