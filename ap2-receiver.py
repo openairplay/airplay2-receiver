@@ -63,15 +63,13 @@ FEATURES = 0x1c340405fca00
 
 
 class Feat(IntFlag):
-    def __str__(self):
-        return self.name
     # https://emanuelecozzi.net/docs/airplay2/features/
     # 07: seems to need NTP
     Ft07AirPlayVideo     = 0x0000000000000080  # 1<<7
     # Ft09 is necessary for iPhones/Music: audio
     Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
     Ft10Unknown          = 0x0000000000000400  # 1<<10
-    Ft11AudExtra         = 0x0000000000000800  # 1<<11
+    Ft11AudRedundant     = 0x0000000000000800  # 1<<11
     # 12: doesn't affect connections
     Ft12Unknown          = 0x0000000000001000  # 1<<12
     # 13-14 seem to be MFi stuff. 13: prevents assoc.
@@ -151,7 +149,9 @@ FEATURES = (
     | Feat.Ft30UnifiedAdvertInf
     | Feat.Ft22AudioUnencrypted
     | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
-    | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
+    | Feat.Ft17AudioMetaTxtDAAP
+    | Feat.Ft16AudioMetaProgres
+    # | Feat.Ft15AudioMetaCovers
     | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
 )
 
@@ -837,14 +837,38 @@ def list_network_interfaces():
                             print(f"    {'IPv4' if address_family == ni.AF_INET else 'IPv6'}: {str(ak[akx])}")
 
 
+def list_available_flags():
+    print(f'[?] Available feature names:')
+    for ft in Feat:
+        print(f' {ft.name}')
+    print('[?] Choose named features via their numbers. E.g. for Ft07, write: 7')
+
+
 if __name__ == "__main__":
 
     multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
+    mutexgroup = parser.add_mutually_exclusive_group()
+
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
-    parser.add_argument("-f", "--features", help="Features")
+    mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
+    mutexgroup.add_argument(
+        "-ft", nargs='+', type=int, metavar='F',
+        help="Explicitly enable individual Airplay feature bits. Use 0 for help.")
+    mutexgroup.add_argument(
+        "-ftnot", nargs='+', type=int, metavar='F',
+        help="Bitwise NOT toggle individual Airplay feature bits from the default. Use 0 for help.")
+    mutexgroup.add_argument(
+        "-ftand", nargs='+', type=int, metavar='F',
+        help="Bitwise AND toggle individual Airplay feature bits from the default. Use 0 for help.")
+    mutexgroup.add_argument(
+        "-ftor", nargs='+', type=int, metavar='F',
+        help="Bitwise OR toggle individual Airplay feature bits from the default. Use 0 for help.")
+    mutexgroup.add_argument(
+        "-ftxor", nargs='+', type=int, metavar='F',
+        help="Bitwise XOR toggle individual Airplay feature bits from the default. Use 0 for help.")
     parser.add_argument("--list-interfaces", help="Prints available network interfaces and exits.", action='store_true')
 
     args = parser.parse_args()
@@ -868,11 +892,44 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     if args.features:
+        # Old way. Leave for those who use this way.
         try:
             FEATURES = int(args.features, 16)
         except Exception:
             print("[!] Error with feature arg - hex format required")
             exit(-1)
+
+    bitwise = args.ft or args.ftnot or args.ftor or args.ftxor or args.ftand
+    # This param is mutex with args.features
+    if bitwise:
+        if (bitwise == [0]):
+            list_available_flags()
+            exit(0)
+        else:
+            try:
+                flags = 0
+                for ft in bitwise:
+                    if ft > 64:
+                        raise Exception
+                    flags |= (1 << int(ft))
+                if args.ft:
+                    FEATURES = Feat(flags)
+                elif args.ftnot:
+                    FEATURES = Feat(~flags)
+                elif args.ftand:
+                    FEATURES &= Feat(flags)
+                elif args.ftor:
+                    FEATURES |= Feat(flags)
+                elif args.ftxor:
+                    FEATURES ^= Feat(flags)
+                print(f'Chosen features: {flags:016x}')
+                print(Feat(flags))
+                print(f'Enabled features: {FEATURES:016x}')
+                print(FEATURES)
+            except Exception:
+                print("[!] Incorrect flags/mask.")
+                print(f"[!] Proceeding with defaults: {int(FEATURES):016x} which are:")
+                print(FEATURES)
 
     DEVICE_ID = None
     IPV4 = None
