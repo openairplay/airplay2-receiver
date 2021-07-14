@@ -58,9 +58,11 @@ def interpolate(value, from_min, from_max, to_min, to_max):
 
 audio_pid = 0
 
+
 def set_volume_pid(pid):
     global audio_pid
     audio_pid = pid
+
 
 def get_pycaw_volume_session():
     if platform.system() != 'Windows' or AudioUtilities is None:
@@ -79,10 +81,14 @@ def get_pycaw_volume_session():
 def get_volume():
     subsys = platform.system()
     if subsys == "Darwin":
-        try:
-            pct = int(subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).rstrip())
-        except ValueError:
-            pct = 0
+        resp = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).rstrip()
+        if resp == b'missing value':
+            pct = 25
+        else:
+            try:
+                pct = int(resp)
+            except ValueError:
+                pct = 0
         vol = interpolate(pct, 0, 100, -30, 0)
     elif subsys == "Linux":
         line_pct = subprocess.check_output(["amixer", "get", "PCM"]).splitlines()[-1]
