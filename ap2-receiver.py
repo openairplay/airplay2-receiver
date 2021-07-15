@@ -965,12 +965,12 @@ if __name__ == "__main__":
                     FEATURES ^= Feat(flags)
                 print(f'Chosen features: {flags:016x}')
                 print(Feat(flags))
-                print(f'Enabled features: {FEATURES:016x}')
-                print(FEATURES)
             except Exception:
                 print("[!] Incorrect flags/mask.")
                 print(f"[!] Proceeding with defaults: {int(FEATURES):016x} which are:")
                 print(FEATURES)
+    print(f'Enabled features: {FEATURES:016x}')
+    print(FEATURES)
 
     DEVICE_ID = None
     IPV4 = None
