@@ -109,6 +109,10 @@ class Hap:
         self.encrypted = False
         self.pair_setup_steps_n = 5
 
+        self.accessory_id = b"00000000-0000-0000-0000-deadbeef0bad"
+        # self.accessory_ltsk = 0
+        # self.accessory_ltpk = 0
+
     def request(self, req):
         req = Tlv8.decode(req)
 
@@ -241,6 +245,9 @@ class Hap:
             format=serialization.PublicFormat.Raw
         )
         self.accessory_shared_key = self.accessory_curve.exchange(x25519.X25519PublicKey.from_public_bytes(client_public))
+
+        self.accessory_ltsk = nacl.signing.SigningKey.generate()
+        self.accessory_ltpk = bytes(self.accessory_ltsk.verify_key)
 
         accessory_info = self.accessory_curve_public + self.accessory_id + client_public
         accessory_signed = self.accessory_ltsk.sign(accessory_info)
