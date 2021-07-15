@@ -136,4 +136,5 @@ events.bin
 # HK Pairing
 
 pairings/*.pub
+pairings/*.perm
 pairings/accessory-secret

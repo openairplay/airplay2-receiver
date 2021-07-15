@@ -3,6 +3,7 @@ import socket
 import hashlib
 import threading
 import os
+import traceback
 from os import path
 
 from hexdump import hexdump
@@ -48,6 +49,11 @@ class PairingState:
     M4 = b'\x04'
     M5 = b'\x05'
     M6 = b'\x06'
+
+
+class HomeKitPermissions:
+    User = '\x00'
+    Admin = '\x01'
 
 
 class Tlv8:
@@ -106,6 +112,28 @@ class Tlv8:
                 res += bytes([tag]) + bytes([left]) + value[-left:]
 
         return res
+
+
+def read_paired_data(identifier: bytes):
+    ident = identifier.decode('utf-8')
+    ltpk_path = f'./pairings/{ident}.hap.pub'
+    ltperm_path = f'./pairings/{ident}.hap.perm'
+
+    with open(ltpk_path, 'rb') as fp:
+        ltpk = fp.read()
+    with open(ltperm_path, 'rb') as fp:
+        ltperm = fp.read()
+    return ltpk, ltperm
+
+
+def write_paired_data(identifier: bytes, ltpk: bytes = None, ltperm: bytes = None):
+    base_path = f'./pairings/{identifier.decode("utf-8")}.hap'
+    if ltpk is not None:
+        with open(f'{base_path}.pub', 'wb') as fp:
+            fp.write(ltpk)
+    if ltperm is not None:
+        with open(f'{base_path}.perm', 'wb') as fp:
+            fp.write(ltperm)
 
 
 class Hap:
@@ -176,24 +204,67 @@ class Hap:
 
     def pair_add(self, req):
         req = Tlv8.decode(req)
+        res = []
+
+        if req[Tlv8.Tag.STATE] == PairingState.M1 and req[Tlv8.Tag.METHOD] == PairingMethod.ADD_PAIRING \
+            and req[Tlv8.Tag.IDENTIFIER] and req[Tlv8.Tag.PUBLICKEY] and req[Tlv8.Tag.PERMISSIONS]:
+            print("-----\tPair-Add [1/1]")
+            res = self.pair_add_m1_m2(req)
+            self.encrypted = True
+        else:
+            print("-----\tPair-Add")
+            print(f"Unexpected data received: {req}")
+        return Tlv8.encode(res)
+
+    def pair_add_m1_m2(self, req):
         identifier = req[Tlv8.Tag.IDENTIFIER]
         device_ltpk = req[Tlv8.Tag.PUBLICKEY]
-        perm = req[Tlv8.Tag.PERMISSIONS]
+        permissions = req[Tlv8.Tag.PERMISSIONS]
 
-        with open("./pairings/" + identifier.decode("utf-8") + ".hap.pub", "wb") as device_pairing_file:
-            device_pairing_file.write(device_ltpk)
-        res = [
+        ltpk_path = f'./pairings/{identifier.decode("utf-8")}.hap.pub'
+
+        if os.path.exists(ltpk_path):
+            ltpk, ltperm = read_paired_data(identifier)
+            if ltperm != HomeKitPermissions.Admin:
+                print('Controller does not have admin bit set in local pairings list')
+                return [
+                    Tlv8.Tag.STATE, PairingState.M2,
+                    Tlv8.Tag.ERROR, PairingErrors.AUTHENTICATION
+                ]
+
+            if device_ltpk != ltpk:
+                print('Device LTPK does not match stored LTPK')
+                return [
+                    Tlv8.Tag.STATE, PairingState.M2,
+                    Tlv8.Tag.ERROR, PairingErrors.UNKNOWN
+                ]
+
+            # Update the permissions of the controller to match AdditionalControllerPermissions
+            write_paired_data(identifier, ltperm=permissions)
+        else:
+            # No pairing exists, write new pairing
+            try:
+                write_paired_data(identifier, device_ltpk, permissions)
+            except (PermissionError, ValueError) as e:
+                # If an error occurs while saving, accessory must abort and respond with:
+                print('pair-add was unable to save pairing data to persistent store:')
+                traceback.print_exception(type(e), e, e.__traceback__)
+                return [
+                    Tlv8.Tag.STATE, PairingState.M2,
+                    Tlv8.Tag.ERROR, PairingErrors.UNKNOWN
+                ]
+
+        return [
             Tlv8.Tag.STATE, PairingState.M2
         ]
-        return Tlv8.encode(res)
 
     def pair_list(self, req):
         req = Tlv8.decode(req)
         res = [
             Tlv8.Tag.STATE, PairingState.M2
         ]
-        # TODO: 5.12.2 2. Verify that the controlle rsending the request has the admin bit set in the local pairings
-        #  list
+        # TODO: 5.12.2 2. Verify that the controller sending the request has the admin bit set in the local pairings
+        #  list (req[Tlv8.Tag.Permissions])
         count = 0
         for file in os.listdir("./pairings/"):
             if file.endswith(".hap.pub"):
