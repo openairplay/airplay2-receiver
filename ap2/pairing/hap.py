@@ -336,7 +336,7 @@ class Hap:
         for file in os.listdir("./pairings/"):
             if file.endswith(".hap.pub"):
                 if count > 0:
-                    res.extend([Tlv8.Tag.SEPARATOR, b'\x00'])
+                    res.extend([Tlv8.Tag.SEPARATOR, b''])
                 current_identifier = file.replace(".hap.pub", "").upper().encode('utf-8')
                 ltpk, ltperm = read_paired_data(current_identifier)
                 res.extend([Tlv8.Tag.IDENTIFIER,
