@@ -192,11 +192,13 @@ class Hap:
         res = [
             Tlv8.Tag.STATE, PairingState.M2
         ]
+        # TODO: 5.12.2 2. Verify that the controlle rsending the request has the admin bit set in the local pairings
+        #  list
         count = 0
         for file in os.listdir("./pairings/"):
             if file.endswith(".hap.pub"):
                 if count > 0:
-                    res.extend([Tlv8.Tag.SEPARATOR, None])
+                    res.extend([Tlv8.Tag.SEPARATOR, b'\x00'])
                 with open("./pairings/" + file, "rb") as device_pairing_file:
                     device_identifier = file.replace(".hap.pub", "").upper()
                     device_ltpk = device_pairing_file.read()
@@ -206,7 +208,9 @@ class Hap:
                             device_ltpk,
                             Tlv8.Tag.PERMISSIONS,
                             b'\x01'])
+                # TODO: Replace the above b'\x01' with the admin bit of the controller
                 count = count + 1
+        print(res)
         return Tlv8.encode(res)
 
     def configure(self):
