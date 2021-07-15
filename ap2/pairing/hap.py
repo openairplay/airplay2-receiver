@@ -114,15 +114,19 @@ class Tlv8:
         return res
 
 
-def read_paired_data(identifier: bytes):
+def read_paired_data(identifier: bytes, read_ltpk: bool = True, read_ltperm: bool = True):
     ident = identifier.decode('utf-8')
     ltpk_path = f'./pairings/{ident}.hap.pub'
     ltperm_path = f'./pairings/{ident}.hap.perm'
+    ltpk = None
+    ltperm = None
 
-    with open(ltpk_path, 'rb') as fp:
-        ltpk = fp.read()
-    with open(ltperm_path, 'rb') as fp:
-        ltperm = fp.read()
+    if read_ltpk:
+        with open(ltpk_path, 'rb') as fp:
+            ltpk = fp.read()
+    if read_ltperm:
+        with open(ltperm_path, 'rb') as fp:
+            ltperm = fp.read()
     return ltpk, ltperm
 
 
@@ -134,6 +138,16 @@ def write_paired_data(identifier: bytes, ltpk: bytes = None, ltperm: bytes = Non
     if ltperm is not None:
         with open(f'{base_path}.perm', 'wb') as fp:
             fp.write(ltperm)
+
+
+def exists_paired_data(identifier: bytes):
+    return os.path.exists(f'./pairings/{identifier.decode("utf-8")}.hap.pub')
+
+
+def remove_paired_data(identifier: bytes):
+    base_path = f'./pairings/{identifier.decode("utf-8")}.hap'
+    os.remove(f'{base_path}.perm')
+    os.remove(f'{base_path}.pub')
 
 
 # noinspection PyMethodMayBeStatic
@@ -222,9 +236,7 @@ class Hap:
         device_ltpk = req[Tlv8.Tag.PUBLICKEY]
         permissions = req[Tlv8.Tag.PERMISSIONS]
 
-        ltpk_path = f'./pairings/{identifier.decode("utf-8")}.hap.pub'
-
-        if os.path.exists(ltpk_path):
+        if exists_paired_data(identifier):
             ltpk, ltperm = read_paired_data(identifier)
             if ltperm != HomeKitPermissions.Admin:
                 print('Controller does not have admin bit set in local pairings list')
@@ -274,7 +286,28 @@ class Hap:
         return Tlv8.encode(res)
 
     def pair_remove_m1_m2(self, req):
-        pass
+        identifier = req[Tlv8.Tag.IDENTIFIER]
+
+        if exists_paired_data(identifier):
+            _, ltperm = read_paired_data(identifier, read_ltpk=False)
+            if ltperm != HomeKitPermissions.Admin:
+                return [
+                    Tlv8.Tag.STATE, PairingState.M2,
+                    Tlv8.Tag.ERROR, PairingErrors.AUTHENTICATION
+                ]
+            try:
+                remove_paired_data(identifier)
+            except PermissionError as e:
+                # If an error occurs while removing, accessory must abort and respond with:
+                print('pair-remove was unable to delete pairing data:')
+                traceback.print_exception(type(e), e, e.__traceback__)
+                return [
+                    Tlv8.Tag.STATE, PairingState.M2,
+                    Tlv8.Tag.ERROR, PairingErrors.UNKNOWN
+                ]
+        return [
+            Tlv8.Tag.STATE, PairingState.M2
+        ]
 
     def pair_list(self, req):
         req = Tlv8.decode(req)
@@ -293,23 +326,20 @@ class Hap:
         res = [
             Tlv8.Tag.STATE, PairingState.M2
         ]
-        # TODO: 5.12.2 2. Verify that the controller sending the request has the admin bit set in the local pairings
-        #  list (req[Tlv8.Tag.Permissions])
+
         count = 0
         for file in os.listdir("./pairings/"):
             if file.endswith(".hap.pub"):
                 if count > 0:
                     res.extend([Tlv8.Tag.SEPARATOR, b'\x00'])
-                with open("./pairings/" + file, "rb") as device_pairing_file:
-                    device_identifier = file.replace(".hap.pub", "").upper()
-                    device_ltpk = device_pairing_file.read()
+                current_identifier = file.replace(".hap.pub", "").upper().encode('utf-8')
+                ltpk, ltperm = read_paired_data(current_identifier)
                 res.extend([Tlv8.Tag.IDENTIFIER,
-                            device_identifier.encode('utf8'),
+                            current_identifier,
                             Tlv8.Tag.PUBLICKEY,
-                            device_ltpk,
+                            ltpk,
                             Tlv8.Tag.PERMISSIONS,
-                            b'\x01'])
-                # TODO: Replace the above b'\x01' with the admin bit of the controller
+                            ltperm])
                 count = count + 1
         return res
 
