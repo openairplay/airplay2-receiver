@@ -166,6 +166,10 @@ HTTP_CT_OCTET = "application/octet-stream"
 HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
+HTTP_CT_PAIR = "application/pairing+tlv8"
+HTTP_X_A_HKP = "X-Apple-HKP"
+HTTP_X_A_CN = "X-Apple-Client-Name"
+HTTP_X_A_PD = "X-Apple-PD"
 
 
 def setup_global_structs(args):
@@ -834,9 +838,18 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", len(res))
         self.send_header("Content-Type", HTTP_CT_BPLIST)
         self.send_header("Server", self.version_string())
+
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
         self.wfile.write(res)
+
+        if self.server.hap.encrypted:
+            hexdump(self.server.hap.accessory_shared_key)
+            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+
+        # Remove point 6-7:
+        # if action == 'remove':
+        #     self.server.hap = None
 
     def handle_info(self):
         if "Content-Type" in self.headers:
@@ -1069,8 +1082,7 @@ if __name__ == "__main__":
                 print(Feat(flags))
             except Exception:
                 print("[!] Incorrect flags/mask.")
-                print(f"[!] Proceeding with defaults: {int(FEATURES):016x} which are:")
-                print(FEATURES)
+                print(f"[!] Proceeding with defaults.")
     print(f'Enabled features: {FEATURES:016x}')
     print(FEATURES)
 

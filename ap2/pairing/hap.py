@@ -38,6 +38,11 @@ class PairingErrors:
     BUSY = b'\x07'
 
 
+class Permissions:
+    Regular_User = 0
+    Admin_User = 1
+
+
 class PairingFlags:
     TRANSIENT = b'\x10'
 
