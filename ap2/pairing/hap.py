@@ -136,6 +136,7 @@ def write_paired_data(identifier: bytes, ltpk: bytes = None, ltperm: bytes = Non
             fp.write(ltperm)
 
 
+# noinspection PyMethodMayBeStatic
 class Hap:
     def __init__(self, identifier):
         self.transient = False
@@ -258,8 +259,37 @@ class Hap:
             Tlv8.Tag.STATE, PairingState.M2
         ]
 
+    def pair_remove(self, req):
+        req = Tlv8.decode(req)
+        res = []
+
+        if req[Tlv8.Tag.STATE] == PairingState.M1 and req[Tlv8.Tag.METHOD] == PairingMethod.REMOVE_PAIRING \
+                and req[Tlv8.Tag.IDENTIFIER]:
+            print("-----\tPair-Remove [1/1]")
+            res = self.pair_remove_m1_m2(req)
+            self.encrypted = True
+        else:
+            print("-----\tPair-Remove")
+            print(f"Unexpected data received: {req}")
+        return Tlv8.encode(res)
+
+    def pair_remove_m1_m2(self, req):
+        pass
+
     def pair_list(self, req):
         req = Tlv8.decode(req)
+        res = []
+
+        if req[Tlv8.Tag.STATE] == PairingState.M1 and req[Tlv8.Tag.METHOD] == PairingMethod.LIST_PAIRINGS:
+            print("-----\tPair-List [1/1]")
+            res = self.pair_list_m1_m2(req)
+            self.encrypted = True
+        else:
+            print("-----\tPair-List")
+            print(f"Unexpected data received: {req}")
+        return Tlv8.encode(res)
+
+    def pair_list_m1_m2(self, req):
         res = [
             Tlv8.Tag.STATE, PairingState.M2
         ]
@@ -281,8 +311,7 @@ class Hap:
                             b'\x01'])
                 # TODO: Replace the above b'\x01' with the admin bit of the controller
                 count = count + 1
-        print(res)
-        return Tlv8.encode(res)
+        return res
 
     def configure(self):
         return self.accessory_id, self.accessory_ltpk

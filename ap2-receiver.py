@@ -381,6 +381,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             print(self.headers)
             print("POST /pair-add")
             self.handle_pair_add()
+        elif self.path == "/pair-remove":
+            print(self.headers)
+            print("POST /pair-remove")
+            self.handle_pair_remove()
         elif self.path == "/pair-list":
             print(self.headers)
             print("POST /pair-list")
@@ -766,6 +770,20 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if content_len > 0:
             body = self.rfile.read(content_len)
             res = self.server.hap.pair_add(body)
+            self.send_response(200)
+            self.send_header("Server", self.version_string())
+            self.send_header("CSeq", self.headers["CSeq"])
+            self.send_header("Content-Length", len(res))
+            self.end_headers()
+            self.wfile.write(res)
+
+    def handle_pair_remove(self):
+        print("pair-remove %s" % self.path)
+        print(self.headers)
+        content_len = int(self.headers["Content-Length"])
+        if content_len > 0:
+            body = self.rfile.read(content_len)
+            res = self.server.hap.pair_remove(body)
             self.send_response(200)
             self.send_header("Server", self.version_string())
             self.send_header("CSeq", self.headers["CSeq"])
