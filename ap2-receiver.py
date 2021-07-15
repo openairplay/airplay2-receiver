@@ -225,16 +225,16 @@ def setup_global_structs(args):
     }
 
     sonos_one_setup = {
-        'eventPort': 0,  # AP2 receiver event server
-        'timingPort': 0,
-        'timingPeerInfo': {
-            'Addresses':
-            [
-                IPV4,
-                IPV6
-            ],
-            'ID': IPV4}
+        'eventPort': 0  # AP2 receiver event server
     }
+    if not DISABLE_PTP_MASTER:
+        sonos_one_setup['timingPort'] = 0
+        sonos_one_setup['timingPeerInfo'] = {
+            'Addresses': [
+                IPV4, IPV6
+            ],
+            'ID': IPV4
+        }
 
     sonos_one_setup_data = {
         'streams': [
@@ -894,6 +894,8 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
+    parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
+                        action='store_true')
     mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
     mutexgroup.add_argument(
         "-ft", nargs='+', type=int, metavar='F',
@@ -932,6 +934,7 @@ if __name__ == "__main__":
         exit(-1)
 
     DISABLE_VM = args.no_volume_management
+    DISABLE_PTP_MASTER = args.no_ptp_master
     if args.features:
         # Old way. Leave for those who use this way.
         try:
