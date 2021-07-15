@@ -970,8 +970,7 @@ if __name__ == "__main__":
                 print(Feat(flags))
             except Exception:
                 print("[!] Incorrect flags/mask.")
-                print(f"[!] Proceeding with defaults: {int(FEATURES):016x} which are:")
-                print(FEATURES)
+                print(f"[!] Proceeding with defaults.")
     print(f'Enabled features: {FEATURES:016x}')
     print(FEATURES)
 
