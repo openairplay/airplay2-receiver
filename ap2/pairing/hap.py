@@ -164,9 +164,6 @@ class Hap:
 
         self.device_ltpk = None
         self.accessory_id = identifier
-        # self.accessory_id = b"00000000-0000-0000-0000-deadbeef0bad"
-        # self.accessory_ltsk = 0
-        # self.accessory_ltpk = 0
 
         if not path.exists('./pairings/accessory-secret'):
             accessory_secret = random(nacl.bindings.crypto_sign_SEEDBYTES)
@@ -418,7 +415,6 @@ class Hap:
 
         # self.accessory_ltsk = nacl.signing.SigningKey.generate()
         # self.accessory_ltpk = bytes(self.accessory_ltsk.verify_key)
-        # self.accessory_id = b"00000000-0000-0000-0000-f0989d7cbbab"
 
         accessory_info = accessory_x + self.accessory_id + self.accessory_ltpk
         accessory_signed = self.accessory_ltsk.sign(accessory_info)

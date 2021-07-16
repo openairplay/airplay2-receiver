@@ -3,6 +3,7 @@
 Very quick python implementation of AP2 protocol using **minimal
 multi-room** features. For now it implements:
 - HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305)
+- HomeKit non-transient pairing
 - FairPlay (v3) authentication
 - Receiving of both REALTIME and BUFFERED Airplay2 audio streams
 - Airplay2 Service publication

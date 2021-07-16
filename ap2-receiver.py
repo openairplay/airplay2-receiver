@@ -153,12 +153,29 @@ FEATURES = (
     | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
 )
 
+
+# PI = Public ID (can be GUID, MAC, some string)
+PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
+
+
+class LTPK():
+    # Long Term Public Key - get it from the hap module.
+    def __init__(self):
+        announce_id, self.ltpk = Hap(PI).configure()
+        self.public_int = int.from_bytes(self.ltpk, byteorder='big')
+        # builds a 64 char hex string, for the 32 byte pub key
+        self.public_string = str.lower("{0:0>4X}".format(self.public_int))
+
+    def get_pub_string(self):
+        return self.public_string
+
+    def get_pub_bytes(self):
+        return self.ltpk
+
+
 DEVICE_ID = None
 IPV4 = None
 IPV6 = None
-
-# TODO: Figure out what "PI" is
-PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
 
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
@@ -170,6 +187,7 @@ HTTP_CT_PAIR = "application/pairing+tlv8"
 HTTP_X_A_HKP = "X-Apple-HKP"
 HTTP_X_A_CN = "X-Apple-Client-Name"
 HTTP_X_A_PD = "X-Apple-PD"
+LTPK = LTPK()
 
 
 def setup_global_structs(args):
@@ -255,7 +273,7 @@ def setup_global_structs(args):
 
     mdns_props = {
         "srcvers": SERVER_VERSION,
-        "deviceid": DEVICE_ID,
+        "deviceid": DEVICE_ID,  # typically MAC addr
         "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
         "flags": "0x4",
         # "name": "GINO", # random
@@ -263,15 +281,24 @@ def setup_global_structs(args):
         # "manufacturer": "Pino", # random
         # "serialNumber": "01234xX321", # random
         "protovers": "1.1",
-        "acl": "0",
-        "rsf": "0x0",
-        "fv": "p20.78000.12",
-        # Casually generated UUIDs
-        "pi": "6dccfd20-b166-49cc-a593-6abd5f724ddb",
-        "gid": "6dccfd20-b166-49cc-a593-6abd5f724ddb",
-        "gcgl": "0",
-        # "vn": "65537",
-        "pk": "ee352b0df39042e201d31564049023af58a106c6d904b74a68aa65012852997f"
+        "acl": "0",  # Access ControL. 0,1,2 == anon,users,admin(?)
+        # These are found under the <deviceid>@<name> mDNS record.
+        # "am": "One",  # Model
+        # "cn": "0,1",  # CompressioN. 0,1 == None aka PCM, ALAC
+        # "da": "true",  # Digest Auth(?) support
+        # "et": "0,1,3,4,5",  # Audio Encryption Types(?).
+        # "md": "0,1,2",  # MetaData(?) 0,1,2 == Text, Gfx, Progress
+        # "sf":  "0x804",  # Status Flags?
+        # "tp": "UDP",  # TransPort for media? csv of transports?
+        # "vs": "366",  # Source version?
+        "rsf": "0x0",  # bitmask: required sender features(?)
+        "fv": "p20.78000.12",  # Firmware version. p20 == AirPlay Src revision?
+        "pi": PI,   # Pairing UUID (generated casually)
+        "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # Group UUID (generated casually)
+        "gcgl": "0",  # Group Contains Group Leader.
+        # "isGroupLeader": "0"  # See gcgl
+        # "vn": "65537",  # (Airplay) version number (supported) 16.16, 65537 == 1.1
+        "pk": LTPK.get_pub_string()  # Ed25519 PubKey
     }
 
 
@@ -818,9 +845,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             body = self.rfile.read(content_len)
             plist = readPlistFromString(body)
             self.pp.pprint(plist)
-        # accessory2_ltsk = nacl.signing.SigningKey.generate()
-        # accessory2_ltpk = bytes(accessory2_ltsk.verify_key)
-        # "248E34D7-A496-465E-A2A8-82AD0D099052"
         accessory_id, accessory_ltpk = self.server.hap.configure()
         configure_info = {
             'Identifier': accessory_id.decode('utf-8'),
