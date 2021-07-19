@@ -191,35 +191,38 @@ LTPK = LTPK()
 
 
 def setup_global_structs(args):
-    global sonos_one_info
-    global sonos_one_setup
-    global sonos_one_setup_data
+    global device_info
+    global device_setup
+    global device_setup_data
     global second_stage_info
     global mdns_props
 
-    sonos_one_info = {
+    device_info = {
         # 'OSInfo': 'Linux 3.10.53',
         # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
-        'audioLatencies': [{
-                           'inputLatencyMicros': 0,
-                           'outputLatencyMicros': 400000,
-                           'type': 100},
-                           {
-                           'audioType': 'default',
-                           'inputLatencyMicros': 0,
-                           'outputLatencyMicros': 400000,
-                           'type': 100},
-                           {
-                           'audioType': 'media',
-                           'inputLatencyMicros': 0,
-                           'outputLatencyMicros': 400000,
-                           'type': 100},
-                           {
-                           'audioType': 'media',
-                           'inputLatencyMicros': 0,
-                           'outputLatencyMicros': 400000,
-                           'type': 102
-                           }],
+        'audioLatencies': [
+            {
+                'inputLatencyMicros': 0,
+                'outputLatencyMicros': 400000,
+                'type': 100
+            },
+            {
+                'audioType': 'default',
+                'inputLatencyMicros': 0,
+                'outputLatencyMicros': 400000,
+                'type': 100},
+            {
+                'audioType': 'media',
+                'inputLatencyMicros': 0,
+                'outputLatencyMicros': 400000,
+                'type': 100},
+            {
+                'audioType': 'media',
+                'inputLatencyMicros': 0,
+                'outputLatencyMicros': 400000,
+                'type': 102
+            }
+        ],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
         'features': FEATURES,
@@ -229,8 +232,8 @@ def setup_global_structs(args):
         # 'hardwareRevision': '1.21.1.8-2',
         'keepAliveLowPower': True,
         'keepAliveSendStatsAsBody': True,
-        'manufacturer': 'Sonos',
-        'model': 'One',
+        'manufacturer': 'OpenAirplay',
+        'model': 'Receiver',
         'name': args.mdns,
         'nameIsFactoryDefault': False,
         'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93',  # UUID generated casually..
@@ -249,19 +252,19 @@ def setup_global_structs(args):
         "initialVolume": volume,
     }
 
-    sonos_one_setup = {
+    device_setup = {
         'eventPort': 0  # AP2 receiver event server
     }
     if not DISABLE_PTP_MASTER:
-        sonos_one_setup['timingPort'] = 0
-        sonos_one_setup['timingPeerInfo'] = {
+        device_setup['timingPort'] = 0
+        device_setup['timingPeerInfo'] = {
             'Addresses': [
                 IPV4, IPV6
             ],
             'ID': IPV4
         }
 
-    sonos_one_setup_data = {
+    device_setup_data = {
         'streams': [
             {
                 'type': 96,
@@ -316,7 +319,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def process_info(self, device_name):
         print('Process info called')
-        sonos_one_info["name"] = "TODO"
+        device_info["name"] = "TODO"
 
     def send_response(self, code, message=None):
         if message is None:
@@ -446,11 +449,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 if "streams" not in plist:
                     print("Sending EVENT:")
                     event_port, self.event_proc = Event.spawn()
-                    sonos_one_setup["eventPort"] = event_port
+                    device_setup["eventPort"] = event_port
                     print("[+] eventPort=%d" % event_port)
 
-                    self.pp.pprint(sonos_one_setup)
-                    res = writePlistToString(sonos_one_setup)
+                    self.pp.pprint(device_setup)
+                    res = writePlistToString(device_setup)
                     self.send_response(200)
                     self.send_header("Content-Length", len(res))
                     self.send_header("Content-Type", HTTP_CT_BPLIST)
@@ -464,16 +467,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     stream = Stream(plist["streams"][0], buff)
                     set_volume_pid(stream.data_proc.pid)
                     self.server.streams.append(stream)
-                    sonos_one_setup_data["streams"][0]["controlPort"] = stream.control_port
-                    sonos_one_setup_data["streams"][0]["dataPort"] = stream.data_port
+                    device_setup_data["streams"][0]["controlPort"] = stream.control_port
+                    device_setup_data["streams"][0]["dataPort"] = stream.data_port
 
                     print("[+] controlPort=%d dataPort=%d" % (stream.control_port, stream.data_port))
                     if stream.type == Stream.BUFFERED:
-                        sonos_one_setup_data["streams"][0]["type"] = stream.type
-                        sonos_one_setup_data["streams"][0]["audioBufferSize"] = buff
+                        device_setup_data["streams"][0]["type"] = stream.type
+                        device_setup_data["streams"][0]["audioBufferSize"] = buff
 
-                    self.pp.pprint(sonos_one_setup_data)
-                    res = writePlistToString(sonos_one_setup_data)
+                    self.pp.pprint(device_setup_data)
+                    res = writePlistToString(device_setup_data)
 
                     self.send_response(200)
                     self.send_header("Content-Length", len(res))
@@ -886,8 +889,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.pp.pprint(plist)
                     if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
                         print("Sending:")
-                        self.pp.pprint(sonos_one_info)
-                        res = writePlistToString(sonos_one_info)
+                        self.pp.pprint(device_info)
+                        res = writePlistToString(device_info)
 
                         self.send_response(200)
                         self.send_header("Content-Length", len(res))
@@ -908,7 +911,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 print("Content-Type: %s | Not implemented" % self.headers["Content-Type"])
                 self.send_error(404)
         else:
-            res = writePlistToString(sonos_one_info)
+            res = writePlistToString(device_info)
             self.send_response(200)
             self.send_header("Content-Length", len(res))
             self.send_header("Content-Type", HTTP_CT_BPLIST)
