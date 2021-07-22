@@ -198,6 +198,15 @@ HTTP_CT_PARAM = "text/parameters"
 HTTP_CT_IMAGE = "image/jpeg"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 HTTP_CT_PAIR = "application/pairing+tlv8"
+"""
+X-Apple-HKP:
+Values 0,2,3,4,6 seen.
+ 0 = Unauth. When Ft48TransientPairing and Ft43SystemPairing are absent
+ 2 = (pair-setup complete, pair-verify starts)
+ 3 = SystemPairing (with Ft43SystemPairing)
+ 4 = Transient
+ 6 = HomeKit
+"""
 HTTP_X_A_HKP = "X-Apple-HKP"
 HTTP_X_A_CN = "X-Apple-Client-Name"
 HTTP_X_A_PD = "X-Apple-PD"
@@ -324,6 +333,41 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     pp = pprint.PrettyPrinter()
 
+    # Maps paths to methods a la HAP-python
+    HANDLERS = {
+        "POST": {
+            "/command": "handle_command",
+            "/feedback": "handle_feedback",
+            "/audioMode": "handle_audiomode",
+            "/auth-setup": "handle_auth_setup",
+            "/fp-setup": "handle_fp_setup",
+            "/fp-setup2": "handle_auth_setup",
+            "/pair-setup": "handle_pair_setup",
+            "/pair-verify": "handle_pair_verify",
+            "/pair-add": "handle_pair_add",
+            "/pair-remove": "handle_pair_remove",
+            "/pair-list": "handle_pair_list",
+            "/configure": "handle_configure",
+        },
+        "GET": {
+            "/info": "handle_info",
+        },
+        "PUT": {"/xyz": "handle_xyz"},
+    }
+
+    def dispatch(self):
+        """Dispatch the request to the appropriate handler method."""
+        print(f'{self.command}: {self.path}')
+        print(self.headers)
+        try:
+            getattr(self, self.HANDLERS[self.command][self.path])()
+        except KeyError:
+            self.send_error(
+                404,
+                ": Method %s Path %s endpoint not implemented" % (self.command, self.path),
+            )
+            self.server.hap = None
+
     def parse_request(self):
         self.raw_requestline = self.raw_requestline.replace(b"RTSP/1.0", b"HTTP/1.1")
 
@@ -350,15 +394,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         return "AirTunes/%s" % SERVER_VERSION
 
     def do_GET(self):
-        print(self.headers)
-        if self.path == "/info":
-            print("GET /info")
-            self.handle_info()
-        else:
-            print("GET %s Not implemented!" % self.path)
-            self.send_error(404)
-            # iDevice gives up, tears down the HAP connection; close ours.
-            self.server.hap = None
+        self.dispatch()
 
     def do_OPTIONS(self):
         print(self.headers)
@@ -395,58 +431,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 self.pp.pprint(plist)
 
     def do_POST(self):
-        if self.path == "/command":
-            print(self.headers)
-            print("POST /command")
-            self.handle_command()
-        elif self.path == "/feedback":
-            # debug logs disabled for feedback
-            self.handle_feedback()
-        elif self.path == "/audioMode":
-            print(self.headers)
-            print("POST /audioMode")
-            self.handle_audiomode()
-        elif self.path == "/auth-setup":
-            print(self.headers)
-            print("POST /auth-setup")
-            self.handle_auth_setup()
-        elif self.path == "/fp-setup":
-            print(self.headers)
-            print("POST /fp-setup")
-            self.handle_fp_setup()
-        elif self.path == "/fp-setup2":
-            print(self.headers)
-            print("POST /fp-setup2")
-            self.handle_auth_setup()
-        elif self.path == "/pair-setup":
-            print(self.headers)
-            print("POST /pair-setup")
-            self.handle_pair_setup()
-        elif self.path == "/pair-verify":
-            print(self.headers)
-            print("POST /pair-verify")
-            self.handle_pair_verify()
-        elif self.path == "/pair-add":
-            print(self.headers)
-            print("POST /pair-add")
-            self.handle_pair_add()
-        elif self.path == "/pair-remove":
-            print(self.headers)
-            print("POST /pair-remove")
-            self.handle_pair_remove()
-        elif self.path == "/pair-list":
-            print(self.headers)
-            print("POST /pair-list")
-            self.handle_pair_list()
-        elif self.path == "/configure":
-            print(self.headers)
-            print("POST /configure")
-            self.handle_configure()
-        else:
-            print("POST %s Not implemented!" % self.path)
-            self.send_error(404)
-            # iDevice gives up, tears down the HAP connection; close ours.
-            self.server.hap = None
+        self.dispatch()
 
     def do_SETUP(self):
         dacp_id = self.headers.get("DACP-ID")
@@ -715,20 +700,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_feedback(self):
-        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
-            content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                body = self.rfile.read(content_len)
-
-                plist = readPlistFromString(body)
-                # feedback logs are pretty much noise...
-                # self.pp.pprint(plist)
-        self.send_response(200)
-        self.send_header("Server", self.version_string())
-        self.send_header("CSeq", self.headers["CSeq"])
-        self.end_headers()
+        self.handle_generic()
 
     def handle_audiomode(self):
+        self.handle_generic()
+
+    def handle_generic(self):
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
@@ -743,23 +720,19 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_auth_setup(self):
-        content_len = int(self.headers["Content-Length"])
-        if content_len > 0:
-            body = self.rfile.read(content_len)
-            hexdump(body)
-
-        self.send_response(200)
-        self.send_header("Server", self.version_string())
-        self.send_header("CSeq", self.headers["CSeq"])
-        self.end_headers()
+        self.handle_X_setup('auth')
 
     def handle_fp_setup(self):
+        self.handle_X_setup('fp')
+
+    def handle_X_setup(self, op: str = ''):
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
-            pf = PlayFair()
-            pf_info = PlayFair.fairplay_s()
-            response = pf.fairplay_setup(pf_info, body)
+            if op == 'fp':
+                pf = PlayFair()
+                pf_info = PlayFair.fairplay_s()
+                response = pf.fairplay_setup(pf_info, body)
             hexdump(body)
 
         self.send_response(200)
@@ -767,42 +740,28 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        self.wfile.write(response)
+        if op == 'fp':
+            self.wfile.write(response)
 
     def handle_pair_setup(self):
-        content_len = int(self.headers["Content-Length"])
-
-        body = self.rfile.read(content_len)
-        hexdump(body)
-
-        if not self.server.hap:
-            self.server.hap = Hap(PI)
-        res = self.server.hap.pair_setup(body)
-
-        self.send_response(200)
-        self.send_header("Content-Length", len(res))
-        self.send_header("Content-Type", HTTP_CT_BPLIST)
-        self.send_header("Server", self.version_string())
-        self.send_header("CSeq", self.headers["CSeq"])
-        self.end_headers()
-        self.wfile.write(res)
-
-        if self.server.hap.encrypted:
-            hexdump(self.server.hap.accessory_shared_key)
-            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+        self.handle_pair_SV('setup')
 
     def handle_pair_verify(self):
-        content_len = int(self.headers["Content-Length"])
+        self.handle_pair_SV('verify')
 
-        body = self.rfile.read(content_len)
+    def handle_pair_SV(self, op):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
 
         if not self.server.hap:
             self.server.hap = Hap(PI)
-        res = self.server.hap.pair_verify(body)
+        if op == 'verify':
+            res = self.server.hap.pair_verify(body)
+        elif op == 'setup':
+            res = self.server.hap.pair_setup(body)
 
         self.send_response(200)
         self.send_header("Content-Length", len(res))
-        self.send_header("Content-Type", HTTP_CT_OCTET)
+        self.send_header("Content-Type", self.headers["Content-Type"])
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
@@ -813,49 +772,45 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 
     def handle_pair_add(self):
-        print("pair-add %s" % self.path)
-        print(self.headers)
-        content_len = int(self.headers["Content-Length"])
-        if content_len > 0:
-            body = self.rfile.read(content_len)
-            res = self.server.hap.pair_add(body)
-            self.send_response(200)
-            self.send_header("Server", self.version_string())
-            self.send_header("CSeq", self.headers["CSeq"])
-            self.send_header("Content-Length", len(res))
-            self.end_headers()
-            self.wfile.write(res)
+        handle_pair_ARL('add')
 
     def handle_pair_remove(self):
-        print("pair-remove %s" % self.path)
+        handle_pair_ARL('remove')
+
+    def handle_pair_list(self):
+        handle_pair_ARL('list')
+
+    def handle_pair_ARL(self, op):
+        print("pair-%s %s" % (op, self.path))
         print(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
-            res = self.server.hap.pair_remove(body)
+            if op == 'add':
+                res = self.server.hap.pair_add(body)
+            elif op == 'remove':
+                res = self.server.hap.pair_remove(body)
+            elif op == 'list':
+                res = self.server.hap.pair_list(body)
+            hexdump(res)
             self.send_response(200)
+            self.send_header("Content-Type", self.headers["Content-Type"])
+            self.send_header("Content-Length", len(res))
             self.send_header("Server", self.version_string())
             self.send_header("CSeq", self.headers["CSeq"])
-            self.send_header("Content-Length", len(res))
             self.end_headers()
             self.wfile.write(res)
 
-    def handle_pair_list(self):
-        print("pair-list %s" % self.path)
-        print(self.headers)
-        content_len = int(self.headers["Content-Length"])
-        if content_len > 0:
-            body = self.rfile.read(content_len)
-            res = self.server.hap.pair_list(body)
-            hexdump(res)
-        self.send_response(200)
-        self.send_header("Server", self.version_string())
-        self.send_header("CSeq", self.headers["CSeq"])
-        self.send_header("Content-Length", len(res))
-        self.end_headers()
-        self.wfile.write(res)
-
     def handle_configure(self):
+        acl_s = 'Access_Control_Level'
+        acl = 0
+        cd_s = 'ConfigurationDictionary'
+        dn = 'NEWBORNE'
+        dn_s = 'Device_Name'
+        hkac = False
+        hkac_s = 'Enable_HK_Access_Control'
+        pw = ''
+        pw_s = 'Password'
         print("configure %s" % self.path)
         print(self.headers)
         content_len = int(self.headers["Content-Length"])
@@ -863,19 +818,32 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             body = self.rfile.read(content_len)
             plist = readPlistFromString(body)
             self.pp.pprint(plist)
+            if acl_s in plist[cd_s]:
+                # 0 == Everyone on the LAN
+                # 1 == Home members
+                # 2 == Admin members
+                acl = int(plist[cd_s][acl_s])
+            if dn_s in plist[cd_s]:
+                dn = plist[cd_s][dn_s]
+            if hkac_s in plist[cd_s]:
+                hkac = bool(plist[cd_s][hkac_s])
+            if pw_s in plist[cd_s]:
+                pw = plist[cd_s][pw_s]
+
         accessory_id, accessory_ltpk = self.server.hap.configure()
         configure_info = {
             'Identifier': accessory_id.decode('utf-8'),
-            'Enable_HK_Access_Control': True,
+            'Enable_HK_Access_Control': hkac,
             'PublicKey': accessory_ltpk,
-            'Device_Name': 'NEWBORNE',
-            'Access_Control_Level': 0
+            'Device_Name': dn,
+            'Access_Control_Level': acl
         }
+        if pw != '':
+            configure_info['Password'] = pw
+
         res = writePlistToString(configure_info)
         self.pp.pprint(configure_info)
-        file = open("./plist.bin", "wb")
-        file.write(res)
-        file.close()
+
         self.send_response(200)
         self.send_header("Content-Length", len(res))
         self.send_header("Content-Type", HTTP_CT_BPLIST)
@@ -884,14 +852,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
         self.wfile.write(res)
-
-        if self.server.hap.encrypted:
-            hexdump(self.server.hap.accessory_shared_key)
-            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
-
-        # Remove point 6-7:
-        # if action == 'remove':
-        #     self.server.hap = None
 
     def handle_info(self):
         if "Content-Type" in self.headers:

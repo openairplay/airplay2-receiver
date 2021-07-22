@@ -5,7 +5,7 @@ pycryptodome
 hexdump
 srptools
 hkdf
-pynacl
+# pynacl
 cryptography
 requests
 av
