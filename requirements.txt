@@ -1,5 +1,5 @@
 netifaces
-zeroconf
+zeroconf==0.28.8
 biplist
 pycryptodome
 hexdump
