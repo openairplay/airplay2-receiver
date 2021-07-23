@@ -64,16 +64,28 @@ FEATURES = 0x1c340405fca00
 
 class Feat(IntFlag):
     # https://emanuelecozzi.net/docs/airplay2/features/
+    # https://openairplay.github.io/airplay-spec/features.html
+    # https://nto.github.io/AirPlay.html
     # 07: seems to need NTP
-    Ft07AirPlayVideo     = 0x0000000000000080  # 1<<7
+    Ft00Video            = 0x0000000000000001  # 1<<0
+    Ft01Photo            = 0x0000000000000002  # 1<<1
+    Ft02VideoFairPlay    = 0x0000000000000004  # 1<<2
+    Ft03VideoVolumeCtrl  = 0x0000000000000008  # 1<<3
+    Ft04VideoHTTPLiveStr = 0x0000000000000010  # 1<<4
+    Ft05Slideshow        = 0x0000000000000020  # 1<<5
+    # Ft06 = 0x40  # 1<<6
+    Ft07ScreenMirroring  = 0x0000000000000080  # 1<<7
+    Ft08ScreenRotate     = 0x0000000000000100  # 1<<8
     # Ft09 is necessary for iPhones/Music: audio
     Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
     Ft10Unknown          = 0x0000000000000400  # 1<<10
     Ft11AudRedundant     = 0x0000000000000800  # 1<<11
-    # 12: doesn't affect connections
-    Ft12Unknown          = 0x0000000000001000  # 1<<12
+    # Feat12: iTunes4Win ends ANNOUNCE with rsaaeskey, does not attempt FPLY auth.
+    # also coerces frequent OPTIONS packets (keepalive) from iPhones.
+    Ft12FPSAPv2p5_AES_GCM = 0x0000000000001000  # 1<<12
     # 13-14 seem to be MFi stuff. 13: prevents assoc.
     Ft13MFiHardware      = 0x0000000000002000  # 1<<13
+    # Music on iPhones needs this to stream audio
     Ft14MFiSoftware      = 0x0000000000004000  # 1<<14
     # 15-17 not mandatory -  faster pairing without
     Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
@@ -91,6 +103,8 @@ class Feat(IntFlag):
     Ft23RSAAuth          = 0x0000000000800000  # 1<<23
     # Unknown             = #1<<24-#1<<25
     # Pairing stalls with longer /auth-setup string w/26
+    # Ft25 seems to require ANNOUNCE
+    Ft25iTunes4WEncrypt  = 0x0000000002000000  # 1<<25
     # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
     Ft26AudioMfi         = 0x0000000004000000  # 1<<26
     # 27: connects and works OK
@@ -106,7 +120,7 @@ class Feat(IntFlag):
     # Ft36Unknown          = 0x0000001000000000  # 1<<36
     Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
     Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
-    # 40 absence triggered: code 501, message Unsupported method ('ANNOUNCE')
+    # 40 absence: requires ANNOUNCE method
     Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
     Ft41_PTPClock        = 0x0000020000000000  # 1<<41
     # Ft42ScreenMultiCodec= 0x00040000000000  # 1<<42
@@ -287,11 +301,12 @@ def setup_global_structs(args):
         "acl": "0",  # Access ControL. 0,1,2 == anon,users,admin(?)
         # These are found under the <deviceid>@<name> mDNS record.
         # "am": "One",  # Model
-        # "cn": "0,1",  # CompressioN. 0,1 == None aka PCM, ALAC
+        # "cn": "0",  # CompressioN. 0,1,2,3 == (None aka) PCM, ALAC, AAC, AAC_ELD
         # "da": "true",  # Digest Auth(?) support
+        # "et": "3",  # Encryption Types. 0,1,3,4,5 == None, RSA, FairPlay, Mfi, FairPlay SAPv2.5
         # "et": "0,1,3,4,5",  # Audio Encryption Types(?).
         # "md": "0,1,2",  # MetaData(?) 0,1,2 == Text, Gfx, Progress
-        # "sf":  "0x804",  # Status Flags?
+        # "sf": "0x804",  # Status Flags?
         # "tp": "UDP",  # TransPort for media? csv of transports?
         # "vs": "366",  # Source version?
         "rsf": "0x0",  # bitmask: required sender features(?)
