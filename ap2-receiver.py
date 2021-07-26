@@ -1100,6 +1100,12 @@ if __name__ == "__main__":
 
     setup_global_structs(args)
 
+    # Rudimentary check for whether v4/6 are still None (no IP found)
+    if IPV4 is None and IPV6 is None:
+        print("[!] No IP found on chosen interface.")
+        list_network_interfaces()
+        exit(-1)
+
     print("Interface: %s" % IFEN)
     print("IPv4: %s" % IPV4)
     print("IPv6: %s" % IPV6)
