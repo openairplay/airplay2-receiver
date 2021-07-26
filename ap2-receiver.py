@@ -772,13 +772,13 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 
     def handle_pair_add(self):
-        handle_pair_ARL('add')
+        self.handle_pair_ARL('add')
 
     def handle_pair_remove(self):
-        handle_pair_ARL('remove')
+        self.handle_pair_ARL('remove')
 
     def handle_pair_list(self):
-        handle_pair_ARL('list')
+        self.handle_pair_ARL('list')
 
     def handle_pair_ARL(self, op):
         print("pair-%s %s" % (op, self.path))
