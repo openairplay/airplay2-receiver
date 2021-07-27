@@ -80,6 +80,7 @@ cd [WHERE_YOU_CLONED_AIRPLAY2_RECEIVER]
 virtualenv airplay2-receiver
 cd airplay2-receiver
 .\Scripts\activate
+cd ..
 pip install -r requirements.txt
 pip install pipwin pycaw
 pipwin install pyaudio
