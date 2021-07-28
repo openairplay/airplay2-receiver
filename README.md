@@ -36,20 +36,50 @@ Next steps:
 Install docker and then build the image:
 
 ```zsh
-docker build -f docker/Dockerfile -t invano/ap2-receiver .
+docker build -f docker/Dockerfile -t ap2-receiver .
 ```
 
 To run the receiver:
 
 ```zsh
-docker run -it --rm --device /dev/snd --net host invano/ap2-receiver
+docker run -it --rm --device /dev/snd --net host ap2-receiver --volume `pwd`/pairings/:/airplay2/pairings/
 ```
 
 Default network device is wlan0, you can change this with AP2IFACE env variable:
 
 ```zsh
-docker run -it --rm --device /dev/snd --env AP2IFACE=eth0 --net host invano/ap2-receiver
+docker run -it --rm --device /dev/snd --env AP2IFACE=eth0 --net host ap2-receiver
 ```
+
+## Docker Compose
+
+Example Docker Compose
+```zsh
+cat << EOF > docker-compose.yaml
+
+version: '3.8'
+services:
+ ap2:
+   restart: unless-stopped
+   network_mode: host
+   build: .
+   # In case we change from host mode and need to map ports.
+   # ports:
+     # - "7000:7000"
+     # - "10000-10100:10000-10100/udp"
+   volumes:
+     - ./pairings:/airplay2/pairings/
+   # devices:
+   #  - "/dev/snd"
+   environment: # All variables are optional.
+     - AP2HOSTNAME=Airplay2
+     - AP2IFACE=eth0
+     - NO_VOLUME_MANAGEMENT=true
+EOF
+
+docker-compose up
+```
+
 
 ## macOS Catalina
 
