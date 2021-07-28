@@ -165,47 +165,48 @@ class RTPBuffer:
             return False
 
 
-class Audio:
-    class AudioFormat(enum.Enum):
-        PCM_8000_16_1 = 1 << 2
-        PCM_8000_16_2 = 1 << 3
-        PCM_16000_16_1 = 1 << 4
-        PCM_16000_16_2 = 1 << 5
-        PCM_24000_16_1 = 1 << 6
-        PCM_24000_16_2 = 1 << 7
-        PCM_32000_16_1 = 1 << 8
-        PCM_32000_16_2 = 1 << 9
-        PCM_44100_16_1 = 1 << 10
-        PCM_44100_16_2 = 1 << 11
-        PCM_44100_24_1 = 1 << 12
-        PCM_44100_24_2 = 1 << 13
-        PCM_48000_16_1 = 1 << 14
-        PCM_48000_16_2 = 1 << 15
-        PCM_48000_24_1 = 1 << 16
-        PCM_48000_24_2 = 1 << 17
-        ALAC_44100_16_2 = 1 << 18
-        ALAC_44100_24_2 = 1 << 19
-        ALAC_48000_16_2 = 1 << 20
-        ALAC_48000_24_2 = 1 << 21
-        AAC_LC_44100_2 = 1 << 22
-        AAC_LC_48000_2 = 1 << 23
-        AAC_ELD_44100_2 = 1 << 24
-        AAC_ELD_48000_2 = 1 << 25
-        AAC_ELD_16000_1 = 1 << 26
-        AAC_ELD_24000_1 = 1 << 27
-        OPUS_16000_1 = 1 << 28
-        OPUS_24000_1 = 1 << 29
-        OPUS_48000_1 = 1 << 30
-        AAC_ELD_44100_1 = 1 << 31
-        AAC_ELD_48000_1 = 1 << 32
+class AirplayAudFmt(enum.Enum):
+    PCM_8000_16_1 = 1 << 2
+    PCM_8000_16_2 = 1 << 3
+    PCM_16000_16_1 = 1 << 4
+    PCM_16000_16_2 = 1 << 5
+    PCM_24000_16_1 = 1 << 6
+    PCM_24000_16_2 = 1 << 7
+    PCM_32000_16_1 = 1 << 8
+    PCM_32000_16_2 = 1 << 9
+    PCM_44100_16_1 = 1 << 10
+    PCM_44100_16_2 = 1 << 11
+    PCM_44100_24_1 = 1 << 12
+    PCM_44100_24_2 = 1 << 13
+    PCM_48000_16_1 = 1 << 14
+    PCM_48000_16_2 = 1 << 15
+    PCM_48000_24_1 = 1 << 16
+    PCM_48000_24_2 = 1 << 17
+    ALAC_44100_16_2 = 1 << 18
+    ALAC_44100_24_2 = 1 << 19
+    ALAC_48000_16_2 = 1 << 20
+    ALAC_48000_24_2 = 1 << 21
+    AAC_LC_44100_2 = 1 << 22
+    AAC_LC_48000_2 = 1 << 23
+    AAC_ELD_44100_2 = 1 << 24
+    AAC_ELD_48000_2 = 1 << 25
+    AAC_ELD_16000_1 = 1 << 26
+    AAC_ELD_24000_1 = 1 << 27
+    OPUS_16000_1 = 1 << 28
+    OPUS_24000_1 = 1 << 29
+    OPUS_48000_1 = 1 << 30
+    AAC_ELD_44100_1 = 1 << 31
+    AAC_ELD_48000_1 = 1 << 32
 
+
+class Audio:
     @staticmethod
     def set_audio_params(self, audio_format):
         # defaults
         self.sample_rate = 44100
         self.sample_size = 16
         self.channel_count = 2
-        self.af = af = str(Audio.AudioFormat(audio_format))
+        self.af = af = str(AirplayAudFmt(audio_format))
 
         if '8000' in af:
             self.sample_rate = 8000
@@ -234,7 +235,7 @@ class Audio:
         else:
             self.channel_count = 2
 
-        print("Negotiated audio format: ", Audio.AudioFormat(audio_format))
+        print("Negotiated audio format: ", AirplayAudFmt(audio_format))
 
     def __init__(self, session_key, audio_format, buff_size):
         self.audio_format = audio_format
@@ -273,13 +274,13 @@ class Audio:
             exit()
         # codec = None
         extradata = None
-        if self.audio_format == Audio.AudioFormat.ALAC_44100_16_2.value:
+        if self.audio_format == AirplayAudFmt.ALAC_44100_16_2.value:
             extradata = self.set_alac_extradata(self, 44100, 16, 2)
-        elif self.audio_format == Audio.AudioFormat.ALAC_44100_24_2.value:
+        elif self.audio_format == AirplayAudFmt.ALAC_44100_24_2.value:
             extradata = self.set_alac_extradata(self, 44100, 24, 2)
-        elif self.audio_format == Audio.AudioFormat.ALAC_48000_16_2.value:
+        elif self.audio_format == AirplayAudFmt.ALAC_48000_16_2.value:
             extradata = self.set_alac_extradata(self, 48000, 16, 2)
-        elif self.audio_format == Audio.AudioFormat.ALAC_48000_24_2.value:
+        elif self.audio_format == AirplayAudFmt.ALAC_48000_24_2.value:
             extradata = self.set_alac_extradata(self, 48000, 24, 2)
 
         if 'ALAC' in self.af:
