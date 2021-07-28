@@ -1126,6 +1126,9 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         pass
+    except ConnectionResetError:
+        # Weird client termination at the other end.
+        pass
     finally:
         print("Shutting down mDNS...")
         unregister_mdns(*mdns)

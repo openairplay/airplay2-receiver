@@ -308,7 +308,7 @@ class Audio:
             self.codecContext = av.codec.CodecContext.create(self.codec)
             self.codecContext.sample_rate = self.sample_rate
             self.codecContext.channels = self.channel_count
-            self.codecContext.format = AudioFormat('s' + str(self.sample_size) + 'p')
+            self.codecContext.format = av.AudioFormat('s' + str(self.sample_size) + 'p')
         if extradata is not None:
             self.codecContext.extradata = extradata
 
