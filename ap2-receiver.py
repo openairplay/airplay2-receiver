@@ -448,7 +448,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 self.pp.pprint(plist)
                 if "streams" not in plist:
                     print("Sending EVENT:")
-                    event_port, self.event_proc = Event.spawn()
+                    event_port, self.event_proc = Event.spawn(self.server.server_address)
                     device_setup["eventPort"] = event_port
                     print("[+] eventPort=%d" % event_port)
 
