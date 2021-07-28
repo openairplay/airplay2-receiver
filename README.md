@@ -80,6 +80,19 @@ EOF
 docker-compose up
 ```
 
+## Debian
+
+```zsh
+sudo apt install -y libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libswscale-dev libswresample-dev libavfilter-dev portaudio19-dev python3 python3-pip python3-pyaudio build-essential pkg-config git alsa-utils
+git clone https://github.com/openairplay/airplay2-receiver.git
+cd airplay2-receiver/
+pip3 install virtualenv
+virtualenv airplay2-receiver
+cd airplay2-receiver/
+pip3 install -r requirements.txt
+pip3 install pyaudio
+```
+
 
 ## macOS Catalina
 
