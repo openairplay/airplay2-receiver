@@ -1,3 +1,0 @@
-This is a temporary file that exists only to ensure this directory is created.
-
-Required for HomeKit Pairing.

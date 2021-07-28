@@ -132,9 +132,3 @@ artwork*
 events.bin
 
 .vscode/*
-
-# HK Pairing
-
-pairings/*.pub
-pairings/*.perm
-pairings/accessory-secret
