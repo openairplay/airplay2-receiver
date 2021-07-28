@@ -726,6 +726,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.handle_X_setup('fp')
 
     def handle_X_setup(self, op: str = ''):
+        response = b''
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
@@ -733,6 +734,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 pf = PlayFair()
                 pf_info = PlayFair.fairplay_s()
                 response = pf.fairplay_setup(pf_info, body)
+            if op == 'auth':
+                plist = readPlistFromString(body)
+                self.pp.pprint(plist)
+                if 'X-Apple-AT' in self.headers and self.headers["X-Apple-AT"] == '16':
+                    # Use flags: 144037111597568 / 0x830040DF0A00
+                    print('Unhandled edge-case for unencrypted auth setup')
             hexdump(body)
 
         self.send_response(200)
