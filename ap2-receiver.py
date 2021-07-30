@@ -279,12 +279,19 @@ def setup_global_structs(args):
         'eventPort': 0  # AP2 receiver event server
     }
     if not DISABLE_PTP_MASTER:
-        device_setup['timingPort'] = 0
+        if IPV6 and not IPV4:
+            addr = [
+                IPV6
+            ]
+        else:
+            # Prefer (only) IPV4
+            addr = [
+                IPV4
+            ]
+        device_setup['timingPort'] = 0  # Seems like legacy, non PTP setting
         device_setup['timingPeerInfo'] = {
-            'Addresses': [
-                IPV4, IPV6
-            ],
-            'ID': IPV4
+            'Addresses': addr,
+            'ID': DEVICE_ID
         }
 
     device_setup_data = {
