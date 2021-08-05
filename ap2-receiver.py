@@ -87,7 +87,7 @@ class Feat(IntFlag):
     Ft13MFiHardware      = 0x0000000000002000  # 1<<13
     # Music on iPhones needs this to stream audio
     Ft14MFiSoftware      = 0x0000000000004000  # 1<<14
-    # 15-17 not mandatory -  faster pairing without
+    # 15-17 not mandatory - faster pairing without
     Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
     Ft16AudioMetaProgres = 0x0000000000010000  # 1<<16
     Ft17AudioMetaTxtDAAP = 0x0000000000020000  # 1<<17
@@ -114,18 +114,19 @@ class Feat(IntFlag):
     # Reserved?           =  # 1<<31
     # 32: iOS music does not see AP with this flag, but macOS sees video - car HUD?
     Ft32CarPlay          = 0x0000000100000000  # 1<<32
-    # Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
-    # Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
-    # Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
+    Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
+    Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
+    Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
     # Ft36Unknown          = 0x0000001000000000  # 1<<36
     Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
     Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
     # 40 absence: requires ANNOUNCE method
     Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
     Ft41_PTPClock        = 0x0000020000000000  # 1<<41
-    # Ft42ScreenMultiCodec= 0x00040000000000  # 1<<42
+    Ft42ScreenMultiCodec = 0x0000040000000000  # 1<<42
     # 43: sends system sounds thru also(?) - setup fails with iOS/macOS
     Ft43SystemPairing    = 0x0000080000000000  # 1<<43
+    Ft44APValeriaScrSend = 0x0000100000000000  # 1<<44
     # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
     # 45 triggers stream type:96 - 41, stream type:103
     Ft45_NTPClock        = 0x0000200000000000  # 1<<45
@@ -136,8 +137,13 @@ class Feat(IntFlag):
     Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
     Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
     Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
-    # Ft54APSync           = 0x40000000000000  # 1<<54
-    Ft60AudioMediaDataCt = 0x1000000000000000  # 1<<60
+    Ft54SupportsAPSync   = 0x0040000000000000  # 1<<54
+    Ft55SupportsWoL      = 0x0080000000000000  # 1<<55
+    Ft56SupportsWoL      = 0x0100000000000000  # 1<<56
+    Ft58HangdogRemote    = 0x0400000000000000  # 1<<58
+    Ft59AudStreamConnStp = 0x0800000000000000  # 1<<59
+    Ft60AudMediaDataCtrl = 0x1000000000000000  # 1<<60
+    Ft61RFC2198Redundant = 0x2000000000000000  # 1<<61
     """
     Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
      iOS just fails at Pair-Setup [2/5]
