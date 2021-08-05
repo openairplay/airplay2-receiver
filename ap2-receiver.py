@@ -1121,6 +1121,7 @@ if __name__ == "__main__":
         exit(-1)
 
     print("Interface: %s" % IFEN)
+    print("Mac: %s" % DEVICE_ID)
     print("IPv4: %s" % IPV4)
     print("IPv6: %s" % IPV6)
     print()
