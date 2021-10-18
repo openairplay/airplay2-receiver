@@ -370,14 +370,24 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def dispatch(self):
         """Dispatch the request to the appropriate handler method."""
-        print(f'{self.command}: {self.path}')
+        path = self.path
+        paramStr = ''
+        if '?' in self.path:
+            path = self.path.split('?')[0]
+            paramStr = self.path.split('?')[1]
+
+        print(f'{self.command}: {path}')
+        print(f'!Dropped parameters: {paramStr}') if paramStr else print('')
         print(self.headers)
         try:
-            getattr(self, self.HANDLERS[self.command][self.path])()
+            # pass additional paramArray:
+            # getattr(self, self.HANDLERS[self.command][path])(paramArray)
+            # Note: handle_* signatures need e.g. (self, *args, **kwargs)
+            getattr(self, self.HANDLERS[self.command][path])()
         except KeyError:
             self.send_error(
                 404,
-                ": Method %s Path %s endpoint not implemented" % (self.command, self.path),
+                ": Method %s Path %s endpoint not implemented" % (self.command, path),
             )
             self.server.hap = None
 
