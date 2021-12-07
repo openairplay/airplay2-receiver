@@ -42,7 +42,7 @@ docker build -f docker/Dockerfile -t ap2-receiver .
 To run the receiver:
 
 ```zsh
-docker run -it --rm --device /dev/snd --net host ap2-receiver --volume `pwd`/pairings/:/airplay2/pairings/
+docker run -it --rm --device /dev/snd --net host --volume `pwd`/pairings/:/airplay2/pairings/ ap2-receiver
 ```
 
 Default network device is wlan0, you can change this with AP2IFACE env variable:
