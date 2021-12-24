@@ -27,6 +27,7 @@ from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
 from enum import IntFlag
 
+from ap2.connections.ptp_time import PTP
 
 """
 # No Auth - coreutils, PairSetupMfi
@@ -487,7 +488,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     print("Sending CONTROL/DATA:")
                     buff = 8388608  # determines how many CODEC frame size 1024 we can hold
-                    stream = Stream(plist["streams"][0], buff)
+                    stream = Stream(plist["streams"][0], buff, self.server.ptp_link)
                     set_volume_pid(stream.data_proc.pid)
                     self.server.streams.append(stream)
                     device_setup_data["streams"][0]["controlPort"] = stream.control_port
@@ -508,7 +509,19 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("CSeq", self.headers["CSeq"])
                     self.end_headers()
                     self.wfile.write(res)
+
+                if "timingProtocol" in plist:
+                    if plist["timingProtocol"] == "PTP":
+                        if self.server.ptp_proc is None:
+                            print("PTP Startup")
+                            mac = int(
+                                (ifen[ni.AF_LINK][0]["addr"]).replace(":", ""), 16
+                            )
+                            self.server.ptp_proc, self.server.ptp_link = PTP.spawn(mac)
+                        else:
+                            print("PTP reusing")
                 return
+
         self.send_error(404)
 
     def do_GET_PARAMETER(self):
@@ -603,10 +616,19 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             try:
                 if content_len > 0:
                     body = self.rfile.read(content_len)
-
                     plist = readPlistFromString(body)
                     if plist["rate"] == 1:
-                        self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
+                        networkTime = plist["networkTimeSecs"] * (10 ** 9)
+                        sample_bytes = plist["networkTimeFrac"].to_bytes(
+                            8, byteorder="big", signed=True
+                        )
+                        uint64_sample = int.from_bytes(sample_bytes, byteorder="big")
+                        nthFactor = 0.5 ** 64
+                        nanos = int(uint64_sample * nthFactor * (10 ** 9))
+                        networkTime += nanos
+                        self.server.streams[0].audio_connection.send(
+                            f'play-{plist["rtpTime"]}-{networkTime}'
+                        )
                     if plist["rate"] == 0:
                         self.server.streams[0].audio_connection.send("pause")
                     self.pp.pprint(plist)
@@ -645,8 +667,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
 
-        # terminate the forked event_proc, otherwise a zombie process consumes 100% cpu
-        self.event_proc.terminate()
+        # # terminate the forked event_proc, otherwise a zombie process consumes 100% cpu
+        # this is causing skip track to not work
+        # self.event_proc.terminate()
 
     def do_SETPEERS(self):
         print("SETPEERS %s" % self.path)
@@ -994,6 +1017,8 @@ class AP2Server(socketserver.TCPServer):
         self.hap = None
         self.enc_layer = False
         self.streams = []
+        self.event_proc = None
+        self.ptp_proc = None
 
     # Override
     def get_request(self):
