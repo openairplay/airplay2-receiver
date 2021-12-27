@@ -9,6 +9,7 @@ import av
 import numpy
 import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
+from Crypto.Cipher import AES
 from av.audio.format import AudioFormat
 
 from ..utils import get_logger, get_free_tcp_socket, get_free_udp_socket
@@ -36,6 +37,7 @@ class RTP_REALTIME(RTP):
         self.payload_type = data[1] & 0b01111111
         self.marker = (data[1] & 0b10000000) >> 7
         self.sequence_no = int.from_bytes(data[2:4], byteorder='big')
+        self.payload = data[12:]  # This is true for ANNOUNCE from iTunes4Win streams
 
 
 class RTP_BUFFERED(RTP):
@@ -237,9 +239,12 @@ class Audio:
 
         print("Negotiated audio format: ", AirplayAudFmt(audio_format))
 
-    def __init__(self, session_key, audio_format, buff_size):
+    def __init__(self, session_key, audio_format, buff_size, session_iv=None):
         self.audio_format = audio_format
         self.session_key = session_key
+        self.session_iv = session_iv
+        sk_len = len(session_key)
+        self.rsakey_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
         self.rtp_buffer = RTPBuffer(buff_size)
         self.set_audio_params(self, audio_format)
 
@@ -330,9 +335,30 @@ class Audio:
         print(f"Total sample_delay (sec): {self.sample_delay:0.5f}")
 
     def decrypt(self, rtp):
-        c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
-        c.update(rtp.aad)
-        data = c.decrypt_and_verify(rtp.payload, rtp.tag)
+        data = b''
+        if self.rsakey_and_iv:
+            try:
+                pl_len = len(rtp.payload)
+                pl_len_crypted = pl_len & ~0xf
+                pl_len_clear = pl_len & 0xf
+                if(pl_len_crypted % 16 == 0):
+                    # Decrypt using RSA key
+                    c  = AES.new(key=self.session_key, mode=AES.MODE_CBC, iv=self.session_iv)
+                    # decrypt the encrypted portion:
+                    data = c.decrypt(rtp.payload[0:pl_len_crypted])
+                    data += bytearray(rtp.payload[pl_len_crypted:pl_len])
+                # else:
+                #     data = rtp.payload[0:pl_len]
+            except (KeyError, ValueError) as e:
+                print('RTP AES MODE_CBC decrypt:', repr(e))
+        else:
+            c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
+            c.update(rtp.aad)
+            try:
+                data = c.decrypt_and_verify(rtp.payload, rtp.tag)
+            except ValueError as e:
+                print('RTP ChaCha20_Poly1305 decrypt:', repr(e))
+                pass
         return data
 
     def handle(self, rtp):
@@ -346,10 +372,19 @@ class Audio:
 
     def process(self, rtp):
         data = self.decrypt(rtp)
+        # print('datalen!:', len(data))
         packet = av.packet.Packet(data)
-        for frame in self.codecContext.decode(packet):
-            frame = self.resampler.resample(frame)
-            return frame.planes[0].to_bytes()
+        if(len(data) > 0):
+            try:
+                for frame in self.codecContext.decode(packet):
+                    frame = self.resampler.resample(frame)
+                    return frame.planes[0].to_bytes()
+            except ValueError as e:
+                print(repr(e))
+                pass
+            # except InvalidDataError as e:
+            #     print(repr(e))
+                # return b'\x00'
 
     def run(self, parent_reader_connection):
         # This pipe is between player (read data) and server (write data)
@@ -361,8 +396,8 @@ class Audio:
         player_thread.start()
 
     @classmethod
-    def spawn(cls, session_key, audio_format, buff):
-        audio = cls(session_key, audio_format, buff)
+    def spawn(cls, session_key, audio_format, buff, iv=None):
+        audio = cls(session_key, audio_format, buff, iv)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
@@ -373,8 +408,8 @@ class Audio:
 
 class AudioRealtime(Audio):
 
-    def __init__(self, session_key, audio_format, buff):
-        super(AudioRealtime, self).__init__(session_key, audio_format, buff)
+    def __init__(self, session_key, audio_format, buff, iv):
+        super(AudioRealtime, self).__init__(session_key, audio_format, buff, iv)
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
 
@@ -397,7 +432,8 @@ class AudioRealtime(Audio):
                     rtp = RTP_REALTIME(data)
                     self.handle(rtp)
                     audio = self.process(rtp)
-                    self.sink.write(audio)
+                    if(audio):
+                        self.sink.write(audio)
         except KeyboardInterrupt:
             pass
         finally:
@@ -406,8 +442,8 @@ class AudioRealtime(Audio):
 
 
 class AudioBuffered(Audio):
-    def __init__(self, session_key, audio_format, buff):
-        super(AudioBuffered, self).__init__(session_key, audio_format, buff)
+    def __init__(self, session_key, audio_format, buff, iv=None):
+        super(AudioBuffered, self).__init__(session_key, audio_format, buff, iv)
         self.socket = get_free_tcp_socket()
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None

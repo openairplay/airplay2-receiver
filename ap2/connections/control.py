@@ -15,6 +15,7 @@ class RTCP:
         self.count = data[0] & 0b00011111
         self.ptype = data[1]
         self.plen = ((data[3] | data[2] << 8) + 1) * 4
+        self.syncs = 0
 
         if self.ptype == RTCP.TIME_ANNOUNCE:
             self.rtpTimeRemote = struct.unpack(">I", data[4:8])[0]
@@ -31,7 +32,7 @@ class Control:
         if rtcp.ptype == RTCP.TIME_ANNOUNCE:
             self.logger.debug("Time announce (215): rtpTimeRemote=%d rtpTime=%d net=%1.7f (%d)" % (rtcp.rtpTimeRemote, rtcp.rtpTime, rtcp.net, rtcp.net_base))
         else:
-            self.logger.debug("vs=%d pad=%d cn=%d type=%d len=%d ssync=%d" % (rtcp.version, rtcp.padding, rtcp.count, rtcp.ptype, rtcp.plen, rtcp.syncs))
+            self.logger.debug("vs=%d pad=%d cn=%d type=%d len=%d" % (rtcp.version, rtcp.padding, rtcp.count, rtcp.ptype, rtcp.plen))
 
     def serve(self):
         self.logger = get_logger("control", level="DEBUG")

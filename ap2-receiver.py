@@ -19,13 +19,14 @@ from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
 from ap2.connections.audio import RTPBuffer
-from ap2.playfair import PlayFair
+from ap2.playfair import PlayFair, FPAES
 from ap2.utils import get_volume, set_volume, set_volume_pid
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import Event
 from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
-from enum import IntFlag
+from enum import IntFlag, Enum
+from ap2.connections.ntp_time import NTP
 
 
 """
@@ -216,6 +217,8 @@ Values 0,2,3,4,6 seen.
 HTTP_X_A_HKP = "X-Apple-HKP"
 HTTP_X_A_CN = "X-Apple-Client-Name"
 HTTP_X_A_PD = "X-Apple-PD"
+HTTP_X_A_AT = "X-Apple-AbsoluteTime"  # Unix timestamp for current system date/time.
+HTTP_X_A_ET = "X-Apple-ET"  # Encryption Type
 LTPK = LTPK()
 
 
@@ -342,9 +345,139 @@ def setup_global_structs(args):
     }
 
 
-class AP2Handler(http.server.BaseHTTPRequestHandler):
+class SDPHandler():
+    # systemcrash 2021
+    class SDPAudioFormat(Enum):
+        (
+            UNSUPPORTED,
+            PCM,
+            ALAC,
+            AAC,
+            AAC_ELD,
+            OPUS,
+        ) = range(6)
 
+    def __init__(self, sdp=''):
+        from ap2.connections.audio import AirplayAudFmt
+
+        self.sdp = sdp.splitlines()
+        self.has_mfi = False
+        self.has_rsa = False
+        self.has_fp = False
+        self.last_media = ''
+        self.has_audio = False
+        self.has_video = False
+        self.audio_format = self.SDPAudioFormat.UNSUPPORTED
+        self.minlatency = 11025
+        self.maxlatency = 11025
+        self.spf = 0
+        for k in self.sdp:
+            if 'v=' in k:
+                self.ver_line = k
+            elif 'o=' in k:
+                self.o_line = k
+            elif 's=' in k:
+                self.subj_line = k
+            elif 'c=' in k:
+                self.conn_line = k
+            elif 't=' in k:
+                self.t_line = k
+            elif 'm=audio' in k:
+                self.has_audio = True
+                self.last_media = 'audio'
+                self.m_aud_line = k
+                start = self.m_aud_line.find('AVP ') + 4
+                self.audio_media_type = int(self.m_aud_line[start:])
+            elif 'a=rtpmap:' in k and self.last_media == 'audio':
+                self.audio_rtpmap = k.split(':')[1]
+                start = self.audio_rtpmap.find(':') + 1
+                mid = self.audio_rtpmap.find(' ') + 1
+                self.payload_type = self.audio_rtpmap[start:mid - 1]  # coerce to int later
+                self.audio_encoding = self.audio_rtpmap[mid:]
+                if self.audio_encoding == 'AppleLossless':
+                    self.audio_format = self.SDPAudioFormat.ALAC
+                elif 'mpeg4-generic/' in self.audio_encoding:
+                    self.audio_format = self.SDPAudioFormat.AAC
+                    discard, self.audio_format_sr, self.audio_format_ch = self.audio_encoding.split('/')
+                    self.audio_format_bd = 16
+                else:
+                    self.audio_format = self.SDPAudioFormat.PCM
+                    self.audio_format_bd, self.audio_format_sr, self.audio_format_ch = self.audio_encoding.split('/')
+                    self.audio_format_bd = ''.join(filter(str.isdigit, self.audio_format_bd))
+            elif 'a=fmtp:' in k and self.payload_type in k:
+                self.audio_fmtp = k.split(':')[1]
+                self.audio_format_params = self.audio_fmtp.split(' ')
+                if self.audio_format == self.SDPAudioFormat.ALAC:
+                    self.spf = self.audio_format_params[1]  # samples per frame
+                    self.audio_format_bd = self.audio_format_params[3]
+                    self.audio_format_ch = self.audio_format_params[7]
+                    self.audio_format_sr = self.audio_format_params[11]
+                    self.audio_desc = 'ALAC'
+                elif self.audio_format == self.SDPAudioFormat.AAC:
+                    self.audio_desc = 'AAC_LC'
+                elif self.audio_format == self.SDPAudioFormat.PCM:
+                    self.audio_desc = 'PCM'
+                elif self.audio_format == self.SDPAudioFormat.OPUS:
+                    self.audio_desc = 'OPUS'
+                if 'mode=' in self.audio_fmtp:
+                    self.audio_format = self.SDPAudioFormat.AAC_ELD
+                    for x in self.audio_format_params:
+                        if 'constantDuration=' in x:
+                            start = x.find('constantDuration=') + len('constantDuration=')
+                            self.constantDuration = int(x[start:].rstrip(';'))
+                            self.spf = self.constantDuration
+                        elif 'mode=' in x:
+                            start = x.find('mode=') + len('mode=')
+                            self.aac_mode = x[start:].rstrip(';')
+                    self.audio_desc = 'AAC_ELD'
+                for f in AirplayAudFmt:
+                    if(self.audio_desc in f.name
+                        and self.audio_format_bd in f.name
+                        and self.audio_format_sr in f.name
+                        and self.audio_format_ch in f.name
+                       ):
+                        self.AirplayAudFmt = f.value
+                        self.audio_format_bd = int(self.audio_format_bd)
+                        self.audio_format_ch = int(self.audio_format_ch)
+                        self.audio_format_sr = int(self.audio_format_sr)
+                        break
+                # video fmtp not needed, it seems.
+            elif 'a=mfiaeskey:' in k:
+                self.has_mfi = True
+                self.aeskey = k.split(':')[1]
+            elif 'a=rsaaeskey:' in k:
+                self.has_rsa = True
+                # RSA - Use Feat.Ft12FPSAPv2p5_AES_GCM
+                self.aeskey = k.split(':')[1]
+            elif 'a=fpaeskey:' in k:
+                self.has_fp = True
+                # FairPlay (v3?) AES key
+                self.aeskey = k.split(':')[1]
+            elif 'a=aesiv:' in k:
+                self.aesiv = k.split(':')[1]
+            elif 'a=min-latency:' in k:
+                self.minlatency = k.split(':')[1]
+            elif 'a=max-latency:' in k:
+                self.maxlatency = k.split(':')[1]
+            elif 'm=video' in k:
+                self.has_video = True
+                self.last_media = 'video'
+                self.m_video_line = k
+                start = self.m_video_line.find('AVP ') + 4
+                self.video_media_type = int(self.m_video_line[start:])
+            elif 'a=rtpmap:' in k and self.last_media == 'video':
+                self.video_rtpmap = k.split(':')[1]
+                start = self.video_rtpmap.find(':') + 1
+                mid = self.video_rtpmap.find(' ') + 1
+                self.video_payload = int(self.video_rtpmap[start:mid - 1])
+                self.video_encoding = self.video_rtpmap[mid:]
+
+
+class AP2Handler(http.server.BaseHTTPRequestHandler):
+    aeskeys = None
     pp = pprint.PrettyPrinter()
+    ntp_port, ptp_port = 0, 0
+    ntp_proc, ptp_proc = None, None
 
     # Maps paths to methods a la HAP-python
     HANDLERS = {
@@ -432,6 +565,53 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                          )
         self.end_headers()
 
+    def do_ANNOUNCE(self):
+        # Enable Feature bit 12: Ft12FPSAPv2p5_AES_GCM: this uses only RSA
+        # Enabling Feat bit 25 and iTunes4win attempts AES - cannot yet decrypt.
+        print("ANNOUNCE %s" % self.path)
+        print(self.headers)
+
+        # dacp_id = self.headers.get("DACP-ID")
+        # active_remote = self.headers.get("Active-Remote")
+
+        if self.headers["Content-Type"] == 'application/sdp':
+            content_len = int(self.headers["Content-Length"])
+            if content_len > 0:
+                sdp_body = self.rfile.read(content_len).decode('utf-8')
+                print(sdp_body)
+                sdp = SDPHandler(sdp_body)
+                if sdp.has_mfi:
+                    print("Mfi not possible on this hardware.")
+                    self.send_response(404)
+                    self.server.hap = None
+                else:
+                    if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
+                       and int((FEATURES & Feat.Ft19RcvAudALAC)) == 0):
+                        print("This receiver not configured for ALAC (set flag 19).")
+                        self.send_response(404)
+                        self.server.hap = None
+                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
+                          and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
+                        print("This receiver not configured for AAC (set flag 20).")
+                        self.send_response(404)
+                        self.server.hap = None
+                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
+                          and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
+                        print("This receiver not configured for AAC (set flag 20/21).")
+                        self.send_response(404)
+                        self.server.hap = None
+                    else:
+                        if sdp.has_fp:
+                            # print('Got FP AES Key from SDP')
+                            self.aeskeys = FPAES(fpaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                        elif sdp.has_rsa:
+                            self.aeskeys = FPAES(rsaaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                        self.send_response(200)
+                        self.send_header("Server", self.version_string())
+                        self.send_header("CSeq", self.headers["CSeq"])
+                        self.end_headers()
+                self.sdp = sdp
+
     def do_FLUSHBUFFERED(self):
         print("FLUSHBUFFERED")
         self.send_response(200)
@@ -462,6 +642,53 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         ua = self.headers.get("User-Agent")
         print("SETUP %s" % self.path)
         print(self.headers)
+        # Found in SETUP after ANNOUNCE:
+        if self.headers["Transport"]:
+            # print(self.headers["Transport"])
+            buff = int(self.sdp.maxlatency)  # determines how many CODEC frame size 1024 we can hold
+
+            # Set up a stream to receive.
+            stream = {
+                'audioFormat': self.sdp.AirplayAudFmt,
+                'latencyMin': int(self.sdp.minlatency),
+                'latencyMax': int(self.sdp.maxlatency),
+                'ct': 0,  # Compression Type(?)
+                'shk': self.aeskeys.aeskey,
+                'shiv': self.aeskeys.aesiv,
+                'spf': int(self.sdp.spf),  # sample frames per pkt
+                'type': int(self.sdp.payload_type),
+                'controlPort': 0,
+            }
+
+            streamobj = Stream(stream, buff)
+
+            self.server.streams.append(streamobj)
+
+            event_port, self.event_proc = Event.spawn(self.server.server_address)
+            timing_port, self.timing_proc = NTP.spawn(self.server.server_address)
+            transport = self.headers["Transport"].split(';')
+            res = []
+            res.append("RTP/AVP/UDP")
+            res.append("unicast")
+            res.append("mode=record")
+            res.append("control_port=%d" % streamobj.control_port)
+            print("control_port=%d" % streamobj.control_port)
+            res.append("server_port=%d" % streamobj.data_port)
+            print("server_port=%d" % streamobj.data_port)
+            res.append("timing_port=%d" % timing_port)
+            print("timing_port=%d" % timing_port)
+            string = ';'
+
+            self.send_response(200)
+            self.send_header("Transport", string.join(res))
+            self.send_header("Session", "1")
+            self.send_header("Audio-Jack-Status", 'connected; type=analog')
+            self.send_header("Server", self.version_string())
+            self.send_header("CSeq", self.headers["CSeq"])
+            self.end_headers()
+
+            return
+
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
@@ -632,10 +859,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     stream = self.server.streams[stream_id]
                     stream.teardown()
                     del self.server.streams[stream_id]
-                else:
-                    for stream in self.server.streams:
-                        stream.teardown()
-                    self.server.streams.clear()
                 self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -647,8 +870,23 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
         # terminate the forked event_proc, otherwise a zombie process consumes 100% cpu
         self.event_proc.terminate()
+        if(self.ntp_proc):
+            self.ntp_proc.terminate()
+        # When changing from RTP_BUFFERED to REALTIME, must clean up:
+        for stream in self.server.streams:
+            stream.teardown()
+        self.server.streams.clear()
 
     def do_SETPEERS(self):
+        """
+        A shorter format to set timing (PTP clock) peers.
+
+        Content-Type: /peer-list-changed
+        Contains [] array of IP{4|6}addrs:
+        ['...::...',
+         '...::...',
+         '...']
+        """
         print("SETPEERS %s" % self.path)
         print(self.headers)
         content_len = int(self.headers["Content-Length"])
@@ -663,14 +901,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_SETPEERSX(self):
-        # extended message format for setting PTP clock peers
+        # Extended format for setting timing (PTP clock) peers
         # Requires Ft52PeersExtMsg (bit 52)
         # Note: this method does not require defining in do_OPTIONS
 
         # Content-Type: /peer-list-changed-x
         # Contains [] array of:
-        # {'Addresses': ['fe80::fb:97fb:2fb3:34bc',
-        #         '192.168.19.110'],
+        # {'Addresses': ['fe80::...',
+        #         '...'],
         #   'ClockID': 000000000000000000,
         #   'ClockPorts': {GUID1: port,
         #                  GUID2: port,

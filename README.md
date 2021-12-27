@@ -11,10 +11,14 @@ multi-room** features. For now it implements:
  Ref: [here](https://emanuelecozzi.net/docs/airplay2/audio/) and 
       [here](https://emanuelecozzi.net/docs/airplay2/rtsp/#setup)
 - Output latency compensation for sync with other Airplay receivers
+- ANNOUNCE and RSA AES for unbuffered streaming from iTunes/Windows
 
 For now it does not implement:
- - MFi Authentication / FairPlay v2 (one of them is required by iTunes/Windows)
- - Audio Sync
+ - FairPlay v2
+ - Accurate audio sync (PTP and/or NTP)
+
+ It may never implement:
+ - MFi Authentication (requires MFi hardware module)
  
 **This code is experimental. This receiver do not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.** 
 
