@@ -342,7 +342,7 @@ def setup_global_structs(args):
         "pi": PI,   # Pairing UUID (generated casually)
         "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # Group UUID (generated casually)
         "gcgl": "0",  # Group Contains Group Leader.
-        # "isGroupLeader": "0"  # See gcgl
+        # "isGroupLeader": "0",  # See gcgl
         # "vn": "65537",  # (Airplay) version number (supported) 16.16, 65537 == 1.1
         "pk": LTPK.get_pub_string()  # Ed25519 PubKey
     }

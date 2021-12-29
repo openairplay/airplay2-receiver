@@ -249,23 +249,27 @@ class Audio:
         self.set_audio_params(self, audio_format)
 
     @staticmethod
-    def set_alac_extradata(self, sample_rate, sample_size, channel_count):
-        extradata = bytes()  # a 36-byte QuickTime atom passed through as extradata
-        extradata += (36).to_bytes(4, byteorder='big')   # 32 bits  atom size
-        extradata += ('alac').encode()                   # 32 bits  tag ('alac')
-        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  tag version (0)
-        extradata += (352).to_bytes(4, byteorder='big')  # 32 bits  samples per frame
-        extradata += (0).to_bytes(1, byteorder='big')    # 8 bits  compatible version   (0)
-        extradata += (sample_size).to_bytes(1, byteorder='big')  # 8 bits  sample size
-        extradata += (40).to_bytes(1, byteorder='big')   # 8 bits  history mult         (40)
-        extradata += (10).to_bytes(1, byteorder='big')   # 8 bits  initial history      (10)
-        extradata += (14).to_bytes(1, byteorder='big')   # 8 bits  rice param limit     (14)
-        extradata += (channel_count).to_bytes(1, byteorder='big')  # 8 bits  channels
-        extradata += (255).to_bytes(2, byteorder='big')  # 16 bits  maxRun               (255)
-        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  max coded frame size (0 means unknown)
-        extradata += (0).to_bytes(4, byteorder='big')    # 32 bits  average bitrate      (0 means unknown)
-        extradata += (sample_rate).to_bytes(4, byteorder='big')  # 32 bits  samplerate
-        return extradata
+    def set_alac_extradata(self, sr, ss, cc,
+                           codec_tag='alac', ver=0, spf=352, compat_ver=0,
+                           hist_mult=40, init_hist=10, rice_lmt=14,
+                           max_run=255, mcfs=0, abr=0,
+                           ):
+        x = bytes()  # a 36-byte QuickTime atom passed through as extradata
+        x += (36).to_bytes(4, byteorder='big')          # 32 bits  atom size
+        x += (codec_tag).encode()                       # 32 bits  tag ('alac')
+        x += (ver).to_bytes(4, byteorder='big')         # 32 bits  tag version (0)
+        x += (spf).to_bytes(4, byteorder='big')         # 32 bits  samples per frame
+        x += (compat_ver).to_bytes(1, byteorder='big')  # 8 bits  compatible version   (0)
+        x += (ss).to_bytes(1, byteorder='big')          # 8 bits  sample size
+        x += (hist_mult).to_bytes(1, byteorder='big')   # 8 bits  history mult         (40)
+        x += (init_hist).to_bytes(1, byteorder='big')   # 8 bits  initial history      (10)
+        x += (rice_lmt).to_bytes(1, byteorder='big')    # 8 bits  rice param limit     (14)
+        x += (cc).to_bytes(1, byteorder='big')          # 8 bits  channels
+        x += (max_run).to_bytes(2, byteorder='big')     # 16 bits  maxRun               (255)
+        x += (mcfs).to_bytes(4, byteorder='big')        # 32 bits  max coded frame size (0 means unknown)
+        x += (abr).to_bytes(4, byteorder='big')         # 32 bits  average bitrate      (0 means unknown)
+        x += (sr).to_bytes(4, byteorder='big')          # 32 bits  samplerate
+        return x
 
     def init_audio_sink(self):
         codecLatencySec = 0
@@ -278,15 +282,15 @@ class Audio:
         if not self.sink:
             exit()
         # codec = None
-        extradata = None
+        ed = None
         if self.audio_format == AirplayAudFmt.ALAC_44100_16_2.value:
-            extradata = self.set_alac_extradata(self, 44100, 16, 2)
+            ed = self.set_alac_extradata(self, sr=44100, ss=16, cc=2)
         elif self.audio_format == AirplayAudFmt.ALAC_44100_24_2.value:
-            extradata = self.set_alac_extradata(self, 44100, 24, 2)
+            ed = self.set_alac_extradata(self, sr=44100, ss=24, cc=2)
         elif self.audio_format == AirplayAudFmt.ALAC_48000_16_2.value:
-            extradata = self.set_alac_extradata(self, 48000, 16, 2)
+            ed = self.set_alac_extradata(self, sr=48000, ss=16, cc=2)
         elif self.audio_format == AirplayAudFmt.ALAC_48000_24_2.value:
-            extradata = self.set_alac_extradata(self, 48000, 24, 2)
+            ed = self.set_alac_extradata(self, sr=48000, ss=24, cc=2)
 
         if 'ALAC' in self.af:
             self.codec = av.codec.Codec('alac', 'r')
@@ -315,8 +319,8 @@ class Audio:
             self.codecContext.sample_rate = self.sample_rate
             self.codecContext.channels = self.channel_count
             self.codecContext.format = av.AudioFormat('s' + str(self.sample_size) + 'p')
-        if extradata is not None:
-            self.codecContext.extradata = extradata
+        if ed is not None:
+            self.codecContext.extradata = ed
 
         self.resampler = av.AudioResampler(
             format=av.AudioFormat('s' + str(self.sample_size)).packed,
@@ -346,6 +350,7 @@ class Audio:
                     c  = AES.new(key=self.session_key, mode=AES.MODE_CBC, iv=self.session_iv)
                     # decrypt the encrypted portion:
                     data = c.decrypt(rtp.payload[0:pl_len_crypted])
+                    # append the unencrypted trailing bytes (fewer than 16)
                     data += bytearray(rtp.payload[pl_len_crypted:pl_len])
                 # else:
                 #     data = rtp.payload[0:pl_len]
