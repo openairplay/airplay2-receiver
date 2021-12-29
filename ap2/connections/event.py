@@ -46,6 +46,11 @@ class Event:
             sock.close()
         except KeyboardInterrupt:
             pass
+        except BrokenPipeError:
+            pass
+        finally:
+            conn.close()
+            self.socket.close()
 
     @staticmethod
     def spawn(addr=None, port=None):

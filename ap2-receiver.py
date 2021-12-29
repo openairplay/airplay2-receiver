@@ -954,7 +954,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     plist["params"]["mrSupportedCommandsFromSender"] = newin
                 if "params" in plist["params"] and "kMRMediaRemoteNowPlayingInfoArtworkData" in plist["params"]["params"]:
                     plist["params"]["params"]["kMRMediaRemoteNowPlayingInfoArtworkData"] = "<redacted ..too long>"
-                self.pp.pprint(plist)
+                # don't print this massive blob - one day we may use it though.
+                # print(plist)  # self.pp.pprint(plist)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
