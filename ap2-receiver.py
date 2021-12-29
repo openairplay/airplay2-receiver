@@ -221,6 +221,9 @@ HTTP_X_A_AT = "X-Apple-AbsoluteTime"  # Unix timestamp for current system date/t
 HTTP_X_A_ET = "X-Apple-ET"  # Encryption Type
 LTPK = LTPK()
 
+#
+AIRPLAY_BUFFER = 8388608  # 0x800000 i.e. 1024 * 8192 - how many CODEC frame size 1024 we can hold
+
 
 def setup_global_structs(args):
     global device_info
@@ -645,7 +648,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Found in SETUP after ANNOUNCE:
         if self.headers["Transport"]:
             # print(self.headers["Transport"])
-            buff = int(self.sdp.maxlatency)  # determines how many CODEC frame size 1024 we can hold
 
             # Set up a stream to receive.
             stream = {
@@ -660,7 +662,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 'controlPort': 0,
             }
 
-            streamobj = Stream(stream, buff)
+            streamobj = Stream(stream, AIRPLAY_BUFFER)
 
             self.server.streams.append(streamobj)
 
@@ -713,8 +715,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(res)
                 else:
                     print("Sending CONTROL/DATA:")
-                    buff = 8388608  # determines how many CODEC frame size 1024 we can hold
-                    stream = Stream(plist["streams"][0], buff)
+                    stream = Stream(plist["streams"][0], AIRPLAY_BUFFER)
                     set_volume_pid(stream.data_proc.pid)
                     self.server.streams.append(stream)
                     device_setup_data["streams"][0]["controlPort"] = stream.control_port
@@ -723,7 +724,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     print("[+] controlPort=%d dataPort=%d" % (stream.control_port, stream.data_port))
                     if stream.type == Stream.BUFFERED:
                         device_setup_data["streams"][0]["type"] = stream.type
-                        device_setup_data["streams"][0]["audioBufferSize"] = buff
+                        device_setup_data["streams"][0]["audioBufferSize"] = AIRPLAY_BUFFER
 
                     self.pp.pprint(device_setup_data)
                     res = writePlistToString(device_setup_data)
