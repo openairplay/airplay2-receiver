@@ -1237,6 +1237,7 @@ class AP2Server(socketserver.TCPServer):
     # and port was not closed before crash (is still open).
     # AP2 client connects from random port.
     allow_reuse_address = True
+    timeout = 60  # seconds
 
     def __init__(self, addr_port, handler):
         super().__init__(addr_port, handler)
@@ -1247,6 +1248,8 @@ class AP2Server(socketserver.TCPServer):
 
     # Override
     def get_request(self):
+        # Quick clean-up in case anything from before is still around.
+        self.hap = None
         client_socket, client_addr = super().get_request()
         SCR_LOG.info(f"Opened connection from {client_addr[0]}:{client_addr[1]}")
         self.connections[client_addr] = client_socket
