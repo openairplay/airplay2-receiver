@@ -1047,7 +1047,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(res)
 
-        if self.server.hap.encrypted:
+        if self.server.hap.encrypted and self.server.hap.mfi_setup:
+            SCR_LOG.warning('MFi setup not yet possible. Disable feature bit 51.')
+        elif self.server.hap.encrypted:
             hexdump(self.server.hap.accessory_shared_key) if DEBUG else ''
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 

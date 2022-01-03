@@ -28,6 +28,10 @@ LTSK_FILE = "ltsk.txt"
 ACCESSORY_SECRET = "accessory-secret"
 
 
+class MFiUnhandledException(Exception):
+    pass
+
+
 class PairingMethod:
     PAIR_SETUP = b'\x00'
     PAIR_SETUP_AUTH = b'\x01'
@@ -282,6 +286,7 @@ class Hap:
         self.isDebug = isDebug
         self.transient = False
         self.encrypted = False
+        self.mfi_setup = False
         self.pair_setup_steps_n = 5
         if self.isDebug:
             self.logger = get_screen_logger('HAP', level='DEBUG')
@@ -398,6 +403,16 @@ class Hap:
                 PairingFlags(flags) == PairingFlags.TRANSIENT:
             self.transient = True
             self.pair_setup_steps_n = 2
+        elif req[Tlv8.Tag.STATE] == PairingState.M1 and \
+                req[Tlv8.Tag.METHOD] == PairingMethod.PAIR_SETUP_AUTH and \
+                Tlv8.Tag.FLAGS in req and \
+                PairingFlags(flags) == PairingFlags.TRANSIENT:
+            """MFi setup - bitflag 51 was enabled
+            result will be wrong, but we can safely set these params.
+            """
+            self.pair_setup_steps_n = 2
+            self.transient = True
+            self.mfi_setup = True
 
         if req[Tlv8.Tag.STATE] == PairingState.M1:
             self.logger.debug(f"-----\tPair-Setup [1/{self.pair_setup_steps_n}]")
@@ -407,6 +422,11 @@ class Hap:
             res = self.pair_setup_m3_m4(req[Tlv8.Tag.PUBLICKEY], req[Tlv8.Tag.PROOF])
             if self.transient:
                 self.encrypted = True
+            if self.mfi_setup:
+                try:
+                    raise MFiUnhandledException()
+                except MFiUnhandledException:
+                    self.logger.error("MFi setup is not yet possible.")
         elif req[Tlv8.Tag.STATE] == PairingState.M5:
             res = self.pair_setup_m5_m6(req[Tlv8.Tag.ENCRYPTEDDATA])
         return Tlv8.encode(res)
