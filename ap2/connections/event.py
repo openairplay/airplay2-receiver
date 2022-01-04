@@ -55,7 +55,6 @@ class EventGeneric:
         except BrokenPipeError:
             pass
         finally:
-            conn.close()
             sock.close()
             if self.isDebug:
                 self.logger.debug(f"Close connection to {addr[0]}:{addr[1]}")

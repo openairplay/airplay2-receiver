@@ -207,6 +207,34 @@ class AirplayAudFmt(enum.Enum):
     AAC_ELD_48000_1 = 1 << 32
 
 
+class AudioSetup:
+    def __init__(self, sr, ss, cc, codec_tag, ver=0, spf=352, compat_ver=0,
+                 hist_mult=40, init_hist=10, rice_lmt=14, max_run=255, mcfs=0, abr=0):
+        x = bytes()  # a 36-byte QuickTime atom passed through as extradata
+        x += (36).to_bytes(4, byteorder='big')             # 32 bits  atom size
+        x += (codec_tag).encode()                          # 32 bits  tag ('alac')
+        x += int(ver).to_bytes(4, byteorder='big')         # 32 bits  tag version (0)
+        x += int(spf).to_bytes(4, byteorder='big')         # 32 bits  samples per frame
+        x += int(compat_ver).to_bytes(1, byteorder='big')  # 8 bits  compatible version   (0)
+        x += int(ss).to_bytes(1, byteorder='big')          # 8 bits  sample size
+        x += int(hist_mult).to_bytes(1, byteorder='big')   # 8 bits  history mult         (40)
+        x += int(init_hist).to_bytes(1, byteorder='big')   # 8 bits  initial history      (10)
+        x += int(rice_lmt).to_bytes(1, byteorder='big')    # 8 bits  rice param limit     (14)
+        x += int(cc).to_bytes(1, byteorder='big')          # 8 bits  channels
+        x += int(max_run).to_bytes(2, byteorder='big')     # 16 bits  maxRun               (255)
+        x += int(mcfs).to_bytes(4, byteorder='big')        # 32 bits  max coded frame size (0 means unknown)
+        x += int(abr).to_bytes(4, byteorder='big')         # 32 bits  average bitrate      (0 means unknown)
+        x += int(sr).to_bytes(4, byteorder='big')          # 32 bits  samplerate
+        self.extradata = x
+        self.sr = sr
+        self.ss = ss
+        self.cc = cc
+        self.spf = spf
+
+    def get_extra_data(self):
+        return self.extradata
+
+
 class Audio:
     @staticmethod
     def set_audio_params(self, audio_format):
@@ -245,7 +273,7 @@ class Audio:
 
         self.audio_screen_logger.debug(f"Negotiated audio format: {AirplayAudFmt(audio_format)}")
 
-    def __init__(self, session_key, audio_format, buff_size, session_iv=None, isDebug=False):
+    def __init__(self, session_key, audio_format, buff_size, session_iv=None, isDebug=False, aud_params: AudioSetup = None):
         self.isDebug = isDebug
         if self.isDebug:
             self.audio_file_logger = get_file_logger("Audio.debug", level="DEBUG")
@@ -253,35 +281,13 @@ class Audio:
         else:
             self.audio_screen_logger = get_screen_logger("Audio.Main", level="INFO")
         self.audio_format = audio_format
+        self.audio_params = aud_params
         self.session_key = session_key
         self.session_iv = session_iv
         sk_len = len(session_key)
         self.rsakey_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
         self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
         self.set_audio_params(self, audio_format)
-
-    @staticmethod
-    def set_alac_extradata(self, sr, ss, cc,
-                           codec_tag='alac', ver=0, spf=352, compat_ver=0,
-                           hist_mult=40, init_hist=10, rice_lmt=14,
-                           max_run=255, mcfs=0, abr=0,
-                           ):
-        x = bytes()  # a 36-byte QuickTime atom passed through as extradata
-        x += (36).to_bytes(4, byteorder='big')          # 32 bits  atom size
-        x += (codec_tag).encode()                       # 32 bits  tag ('alac')
-        x += (ver).to_bytes(4, byteorder='big')         # 32 bits  tag version (0)
-        x += (spf).to_bytes(4, byteorder='big')         # 32 bits  samples per frame
-        x += (compat_ver).to_bytes(1, byteorder='big')  # 8 bits  compatible version   (0)
-        x += (ss).to_bytes(1, byteorder='big')          # 8 bits  sample size
-        x += (hist_mult).to_bytes(1, byteorder='big')   # 8 bits  history mult         (40)
-        x += (init_hist).to_bytes(1, byteorder='big')   # 8 bits  initial history      (10)
-        x += (rice_lmt).to_bytes(1, byteorder='big')    # 8 bits  rice param limit     (14)
-        x += (cc).to_bytes(1, byteorder='big')          # 8 bits  channels
-        x += (max_run).to_bytes(2, byteorder='big')     # 16 bits  maxRun               (255)
-        x += (mcfs).to_bytes(4, byteorder='big')        # 32 bits  max coded frame size (0 means unknown)
-        x += (abr).to_bytes(4, byteorder='big')         # 32 bits  average bitrate      (0 means unknown)
-        x += (sr).to_bytes(4, byteorder='big')          # 32 bits  samplerate
-        return x
 
     def init_audio_sink(self):
         codecLatencySec = 0
@@ -298,13 +304,16 @@ class Audio:
         # codec = None
         ed = None
         if self.audio_format == AirplayAudFmt.ALAC_44100_16_2.value:
-            ed = self.set_alac_extradata(self, sr=44100, ss=16, cc=2)
+            ed = AudioSetup(codec_tag='alac', sr=44100, ss=16, cc=2).get_extra_data()
         elif self.audio_format == AirplayAudFmt.ALAC_44100_24_2.value:
-            ed = self.set_alac_extradata(self, sr=44100, ss=24, cc=2)
+            ed = AudioSetup(codec_tag='alac', sr=44100, ss=24, cc=2).get_extra_data()
         elif self.audio_format == AirplayAudFmt.ALAC_48000_16_2.value:
-            ed = self.set_alac_extradata(self, sr=48000, ss=16, cc=2)
+            ed = AudioSetup(codec_tag='alac', sr=48000, ss=16, cc=2).get_extra_data()
         elif self.audio_format == AirplayAudFmt.ALAC_48000_24_2.value:
-            ed = self.set_alac_extradata(self, sr=48000, ss=24, cc=2)
+            ed = AudioSetup(codec_tag='alac', sr=48000, ss=24, cc=2).get_extra_data()
+
+        if self.audio_params:
+            ed = self.audio_params.get_extra_data()
 
         if 'ALAC' in self.af:
             self.codec = av.codec.Codec('alac', 'r')
@@ -409,8 +418,8 @@ class Audio:
         player_thread.start()
 
     @classmethod
-    def spawn(cls, session_key, audio_format, buff, iv=None, isDebug=False):
-        audio = cls(session_key, audio_format, buff, iv, isDebug)
+    def spawn(cls, session_key, audio_format, buff, iv=None, isDebug=False, aud_params: AudioSetup = None):
+        audio = cls(session_key, audio_format, buff, iv, isDebug, aud_params)
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
@@ -421,8 +430,8 @@ class Audio:
 
 class AudioRealtime(Audio):
 
-    def __init__(self, session_key, audio_format, buff, iv, isDebug=False):
-        super(AudioRealtime, self).__init__(session_key, audio_format, buff, iv, isDebug)
+    def __init__(self, session_key, audio_format, buff, iv, isDebug=False, aud_params: AudioSetup = None):
+        super(AudioRealtime, self).__init__(session_key, audio_format, buff, iv, isDebug, aud_params)
         self.isDebug = isDebug
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
@@ -455,8 +464,8 @@ class AudioRealtime(Audio):
 
 
 class AudioBuffered(Audio):
-    def __init__(self, session_key, audio_format, buff, iv=None, isDebug=False):
-        super(AudioBuffered, self).__init__(session_key, audio_format, buff, iv, isDebug)
+    def __init__(self, session_key, audio_format, buff, iv=None, isDebug=False, aud_params: AudioSetup = None):
+        super(AudioBuffered, self).__init__(session_key, audio_format, buff, iv, isDebug, aud_params)
         self.isDebug = isDebug
         if self.isDebug:
             self.ab_file_logger = get_file_logger("AudioBuffered", level="DEBUG")

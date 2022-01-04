@@ -14,7 +14,7 @@ class Stream:
     REALTIME = 96
     BUFFERED = 103
 
-    def __init__(self, stream, buff, isDebug=False):
+    def __init__(self, stream, buff, isDebug=False, aud_params=None):
         # self.audioMode = stream["audioMode"] # default|moviePlayback
         self.isDebug = isDebug
         self.audio_format = stream["audioFormat"]
@@ -31,10 +31,10 @@ class Stream:
             self.latency_min = stream["latencyMin"]
             self.latency_max = stream["latencyMax"]
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
-                self.session_key, self.audio_format, buff, self.session_iv, isDebug=self.isDebug)
+                self.session_key, self.audio_format, buff, self.session_iv, isDebug=self.isDebug, aud_params=None)
         elif self.type == Stream.BUFFERED:
             self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(
-                self.session_key, self.audio_format, buff, iv=None, isDebug=self.isDebug)
+                self.session_key, self.audio_format, buff, iv=None, isDebug=self.isDebug, aud_params=None)
 
     def teardown(self):
         self.data_proc.terminate()

@@ -23,6 +23,7 @@ from ap2.playfair import PlayFair, FairPlayAES
 from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import EventGeneric
+from ap2.connections.audio import AudioSetup
 from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
 from enum import IntFlag, Enum
@@ -410,12 +411,28 @@ class SDPHandler():
                     self.audio_format_bd = ''.join(filter(str.isdigit, self.audio_format_bd))
             elif 'a=fmtp:' in k and self.payload_type in k:
                 self.audio_fmtp = k.split(':')[1]
-                self.audio_format_params = self.audio_fmtp.split(' ')
+                self.afp = self.audio_fmtp.split(' ')  # audio format params
                 if self.audio_format == self.SDPAudioFormat.ALAC:
-                    self.spf = self.audio_format_params[1]  # samples per frame
-                    self.audio_format_bd = self.audio_format_params[3]
-                    self.audio_format_ch = self.audio_format_params[7]
-                    self.audio_format_sr = self.audio_format_params[11]
+                    self.spf = self.afp[1]  # samples per frame
+                    # a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
+                    self.params = AudioSetup(
+                        codec_tag='alac',
+                        ver=0,
+                        spf=self.afp[1],
+                        compat_ver=self.afp[2],
+                        ss=self.afp[3],  # bitdepth
+                        hist_mult=self.afp[4],
+                        init_hist=self.afp[5],
+                        rice_lmt=self.afp[6],
+                        cc=self.afp[7],
+                        max_run=self.afp[8],
+                        mcfs=self.afp[9],
+                        abr=self.afp[10],
+                        sr=self.afp[11],
+                    )
+                    self.audio_format_bd = self.afp[3]
+                    self.audio_format_ch = self.afp[7]
+                    self.audio_format_sr = self.afp[11]
                     self.audio_desc = 'ALAC'
                 elif self.audio_format == self.SDPAudioFormat.AAC:
                     self.audio_desc = 'AAC_LC'
@@ -425,7 +442,7 @@ class SDPHandler():
                     self.audio_desc = 'OPUS'
                 if 'mode=' in self.audio_fmtp:
                     self.audio_format = self.SDPAudioFormat.AAC_ELD
-                    for x in self.audio_format_params:
+                    for x in self.afp:
                         if 'constantDuration=' in x:
                             start = x.find('constantDuration=') + len('constantDuration=')
                             self.constantDuration = int(x[start:].rstrip(';'))
@@ -581,6 +598,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 sdp_body = self.rfile.read(content_len).decode('utf-8')
                 SCR_LOG.debug(sdp_body)
                 sdp = SDPHandler(sdp_body)
+                self.aud_params = sdp.params
                 if sdp.has_mfi:
                     SCR_LOG.warning("MFi not possible on this hardware.")
                     self.send_response(404)
@@ -660,7 +678,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 'controlPort': 0,
             }
 
-            streamobj = Stream(stream, AIRPLAY_BUFFER, DEBUG)
+            streamobj = Stream(stream, AIRPLAY_BUFFER, DEBUG, self.aud_params)
 
             self.server.streams.append(streamobj)
 
