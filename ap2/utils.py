@@ -112,7 +112,7 @@ def get_file_logger(name, level="INFO"):
     fh.setFormatter(formatter)
     sh = logging.StreamHandler()
     if logger.hasHandlers():
-        print(f'removing StreamHandler from {name} file logger')
+        print(f'[utils] removing StreamHandler from {name} file logger')
         logger.removeHandler(sh)
     logger.addHandler(fh)
     if level == 'DEBUG':
