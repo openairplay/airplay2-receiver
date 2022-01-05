@@ -3,6 +3,7 @@ import sys
 import time
 import struct
 import socket
+import logging
 import argparse
 import tempfile
 import multiprocessing
@@ -18,15 +19,13 @@ from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
-from ap2.connections.audio import RTPBuffer
-from ap2.playfair import PlayFair, FPAES
-from ap2.utils import get_volume, set_volume, set_volume_pid
+from ap2.playfair import PlayFair, FairPlayAES
+from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
 from ap2.pairing.hap import Hap, HAPSocket
-from ap2.connections.event import Event
+from ap2.connections.event import EventGeneric
 from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
 from enum import IntFlag, Enum
-from ap2.connections.ntp_time import NTP
 
 
 """
@@ -177,12 +176,13 @@ FEATURES = (
 
 # PI = Public ID (can be GUID, MAC, some string)
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
+DEBUG = False
 
 
 class LTPK():
     # Long Term Public Key - get it from the hap module.
-    def __init__(self):
-        announce_id, self.ltpk = Hap(PI).configure()
+    def __init__(self, isDebug=False):
+        announce_id, self.ltpk = Hap(PI, isDebug).configure()
         self.public_int = int.from_bytes(self.ltpk, byteorder='big')
         # builds a 64 char hex string, for the 32 byte pub key
         self.public_string = str.lower("{0:0>4X}".format(self.public_int))
@@ -219,18 +219,19 @@ HTTP_X_A_CN = "X-Apple-Client-Name"
 HTTP_X_A_PD = "X-Apple-PD"
 HTTP_X_A_AT = "X-Apple-AbsoluteTime"  # Unix timestamp for current system date/time.
 HTTP_X_A_ET = "X-Apple-ET"  # Encryption Type
-LTPK = LTPK()
 
 #
 AIRPLAY_BUFFER = 8388608  # 0x800000 i.e. 1024 * 8192 - how many CODEC frame size 1024 we can hold
 
 
-def setup_global_structs(args):
+def setup_global_structs(args, isDebug=False):
     global device_info
     global device_setup
     global device_setup_data
     global second_stage_info
     global mdns_props
+    global LTPK
+    LTPK = LTPK(isDebug)
 
     device_info = {
         # 'OSInfo': 'Linux 3.10.53',
@@ -319,7 +320,7 @@ def setup_global_structs(args):
     mdns_props = {
         "srcvers": SERVER_VERSION,
         "deviceid": DEVICE_ID,  # typically MAC addr
-        "features": "%s,%s" % (hex(FEATURES & 0xffffffff), hex(FEATURES >> 32 & 0xffffffff)),
+        "features": f"{hex(FEATURES & 0xffffffff)},{hex(FEATURES >> 32 & 0xffffffff)}",
         "flags": "0x4",
         # "name": "GINO", # random
         "model": "Airplay2-Receiver",  # random
@@ -512,9 +513,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             path = self.path.split('?')[0]
             paramStr = self.path.split('?')[1]
 
-        print(f'{self.command}: {path}')
-        print(f'!Dropped parameters: {paramStr}') if paramStr else print('')
-        print(self.headers)
+        SCR_LOG.debug(f'{self.command}: {path}')
+        SCR_LOG.debug(f'!Dropped parameters: {paramStr}') if paramStr else SCR_LOG.debug('')
+        SCR_LOG.debug(self.headers)
         try:
             # pass additional paramArray:
             # getattr(self, self.HANDLERS[self.command][path])(paramArray)
@@ -523,7 +524,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         except KeyError:
             self.send_error(
                 404,
-                ": Method %s Path %s endpoint not implemented" % (self.command, path),
+                f": Method {self.command} Path {path} endpoint not implemented"
             )
             self.server.hap = None
 
@@ -536,7 +537,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         return r
 
     def process_info(self, device_name):
-        print('Process info called')
+        SCR_LOG.info('Process info called')
         device_info["name"] = "TODO"
 
     def send_response(self, code, message=None):
@@ -546,17 +547,17 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             else:
                 message = b''
 
-        response = "%s %d %s\r\n" % (self.protocol_version, code, message)
+        response = f"{self.protocol_version} {code} {message}\r\n"
         self.wfile.write(response.encode())
 
     def version_string(self):
-        return "AirTunes/%s" % SERVER_VERSION
+        return f"AirTunes/{SERVER_VERSION}"
 
     def do_GET(self):
         self.dispatch()
 
     def do_OPTIONS(self):
-        print(self.headers)
+        SCR_LOG.debug(self.headers)
 
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -571,44 +572,41 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     def do_ANNOUNCE(self):
         # Enable Feature bit 12: Ft12FPSAPv2p5_AES_GCM: this uses only RSA
         # Enabling Feat bit 25 and iTunes4win attempts AES - cannot yet decrypt.
-        print("ANNOUNCE %s" % self.path)
-        print(self.headers)
-
-        # dacp_id = self.headers.get("DACP-ID")
-        # active_remote = self.headers.get("Active-Remote")
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
 
         if self.headers["Content-Type"] == 'application/sdp':
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 sdp_body = self.rfile.read(content_len).decode('utf-8')
-                print(sdp_body)
+                SCR_LOG.debug(sdp_body)
                 sdp = SDPHandler(sdp_body)
                 if sdp.has_mfi:
-                    print("Mfi not possible on this hardware.")
+                    SCR_LOG.warning("MFi not possible on this hardware.")
                     self.send_response(404)
                     self.server.hap = None
                 else:
                     if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
                        and int((FEATURES & Feat.Ft19RcvAudALAC)) == 0):
-                        print("This receiver not configured for ALAC (set flag 19).")
+                        SCR_LOG.warning("This receiver not configured for ALAC (set flag 19).")
                         self.send_response(404)
                         self.server.hap = None
                     elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
                           and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
-                        print("This receiver not configured for AAC (set flag 20).")
+                        SCR_LOG.warning("This receiver not configured for AAC (set flag 20).")
                         self.send_response(404)
                         self.server.hap = None
                     elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
                           and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
-                        print("This receiver not configured for AAC (set flag 20/21).")
+                        SCR_LOG.warning("This receiver not configured for AAC (set flag 20/21).")
                         self.send_response(404)
                         self.server.hap = None
                     else:
                         if sdp.has_fp:
-                            # print('Got FP AES Key from SDP')
-                            self.aeskeys = FPAES(fpaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                            # SCR_LOG.debug('Got FP AES Key from SDP')
+                            self.aeskeys = FairPlayAES(fpaeskey=sdp.aeskey, aesiv=sdp.aesiv)
                         elif sdp.has_rsa:
-                            self.aeskeys = FPAES(rsaaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                            self.aeskeys = FairPlayAES(rsaaeskey=sdp.aeskey, aesiv=sdp.aesiv)
                         self.send_response(200)
                         self.send_header("Server", self.version_string())
                         self.send_header("CSeq", self.headers["CSeq"])
@@ -616,7 +614,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 self.sdp = sdp
 
     def do_FLUSHBUFFERED(self):
-        print("FLUSHBUFFERED")
+        SCR_LOG.info(f'{self.command}: {self.path}')
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -628,13 +626,13 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                flush_from_seq = 0
+                fr = 0
                 if "flushFromSeq" in plist:
-                    flush_from_seq = plist["flushFromSeq"]
+                    fr = plist["flushFromSeq"]
                 if "flushUntilSeq" in plist:
-                    flush_until_seq = plist["flushUntilSeq"]
-                    self.server.streams[0].audio_connection.send("flush_from_until_seq-%i-%i" % (flush_from_seq, flush_until_seq))
-                self.pp.pprint(plist)
+                    to = plist["flushUntilSeq"]
+                    self.server.streams[0].audio_connection.send(f"flush_from_until_seq-{fr}-{to}")
+                SCR_LOG.debug(self.pp.pformat(plist))
 
     def do_POST(self):
         self.dispatch()
@@ -643,11 +641,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         dacp_id = self.headers.get("DACP-ID")
         active_remote = self.headers.get("Active-Remote")
         ua = self.headers.get("User-Agent")
-        print("SETUP %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         # Found in SETUP after ANNOUNCE:
         if self.headers["Transport"]:
-            # print(self.headers["Transport"])
+            # SCR_LOG.debug(self.headers["Transport"])
 
             # Set up a stream to receive.
             stream = {
@@ -662,23 +660,28 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 'controlPort': 0,
             }
 
-            streamobj = Stream(stream, AIRPLAY_BUFFER)
+            streamobj = Stream(stream, AIRPLAY_BUFFER, DEBUG)
 
             self.server.streams.append(streamobj)
 
-            event_port, self.event_proc = Event.spawn(self.server.server_address)
-            timing_port, self.timing_proc = NTP.spawn(self.server.server_address)
+            event_port, self.event_proc = EventGeneric.spawn(
+                self.server.server_address, name='events', isDebug=DEBUG)
+            timing_port, self.timing_proc = EventGeneric.spawn(
+                self.server.server_address, name='ntp', isDebug=DEBUG)
             transport = self.headers["Transport"].split(';')
             res = []
             res.append("RTP/AVP/UDP")
             res.append("unicast")
             res.append("mode=record")
-            res.append("control_port=%d" % streamobj.control_port)
-            print("control_port=%d" % streamobj.control_port)
-            res.append("server_port=%d" % streamobj.data_port)
-            print("server_port=%d" % streamobj.data_port)
-            res.append("timing_port=%d" % timing_port)
-            print("timing_port=%d" % timing_port)
+            ctl_msg = f"control_port={streamobj.control_port}"
+            res.append(ctl_msg)
+            SCR_LOG.debug(ctl_msg)
+            data_msg = f"data_port={streamobj.data_port}"
+            res.append(data_msg)
+            SCR_LOG.debug(data_msg)
+            ntp_msg = f"timing_port={timing_port}"
+            res.append(ntp_msg)
+            SCR_LOG.debug(ntp_msg)
             string = ';'
 
             self.send_response(200)
@@ -688,6 +691,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Server", self.version_string())
             self.send_header("CSeq", self.headers["CSeq"])
             self.end_headers()
+            SCR_LOG.info('')
 
             return
 
@@ -697,14 +701,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                SCR_LOG.debug(self.pp.pformat(plist))
                 if "streams" not in plist:
-                    print("Sending EVENT:")
-                    event_port, self.event_proc = Event.spawn(self.server.server_address)
+                    SCR_LOG.debug("Sending EVENT:")
+                    event_port, self.event_proc = EventGeneric.spawn(
+                        self.server.server_address, name='events', isDebug=DEBUG)
                     device_setup["eventPort"] = event_port
-                    print("[+] eventPort=%d" % event_port)
+                    SCR_LOG.debug(f"[+] eventPort={event_port}")
 
-                    self.pp.pprint(device_setup)
+                    SCR_LOG.debug(self.pp.pformat(device_setup))
                     res = writePlistToString(device_setup)
                     self.send_response(200)
                     self.send_header("Content-Length", len(res))
@@ -713,20 +718,21 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("CSeq", self.headers["CSeq"])
                     self.end_headers()
                     self.wfile.write(res)
+                    SCR_LOG.info('')
                 else:
-                    print("Sending CONTROL/DATA:")
-                    stream = Stream(plist["streams"][0], AIRPLAY_BUFFER)
+                    SCR_LOG.debug("Sending CONTROL/DATA:")
+                    stream = Stream(plist["streams"][0], AIRPLAY_BUFFER, DEBUG)
                     set_volume_pid(stream.data_proc.pid)
                     self.server.streams.append(stream)
                     device_setup_data["streams"][0]["controlPort"] = stream.control_port
                     device_setup_data["streams"][0]["dataPort"] = stream.data_port
 
-                    print("[+] controlPort=%d dataPort=%d" % (stream.control_port, stream.data_port))
+                    SCR_LOG.debug(f"[+] controlPort={stream.control_port} dataPort={stream.data_port}")
                     if stream.type == Stream.BUFFERED:
                         device_setup_data["streams"][0]["type"] = stream.type
                         device_setup_data["streams"][0]["audioBufferSize"] = AIRPLAY_BUFFER
 
-                    self.pp.pprint(device_setup_data)
+                    SCR_LOG.debug(self.pp.pformat(device_setup_data))
                     res = writePlistToString(device_setup_data)
 
                     self.send_response(200)
@@ -736,12 +742,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("CSeq", self.headers["CSeq"])
                     self.end_headers()
                     self.wfile.write(res)
+                    SCR_LOG.info('')
                 return
         self.send_error(404)
+        SCR_LOG.info('')
 
     def do_GET_PARAMETER(self):
-        print("GET_PARAMETER %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         params_res = {}
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
@@ -750,13 +758,13 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             params = body.splitlines()
             for p in params:
                 if p == b"volume":
-                    print("GET_PARAMETER: %s" % p)
+                    SCR_LOG.info(f"GET_PARAMETER: {p}")
                     if not DISABLE_VM:
                         params_res[p] = str(get_volume()).encode()
                     else:
-                        print("Volume Management is disabled")
+                        SCR_LOG.warning("Volume Management is disabled")
                 else:
-                    print("Ops GET_PARAMETER: %s" % p)
+                    SCR_LOG.info(f"Ops GET_PARAMETER: {p}")
         if DISABLE_VM:
             res = b"volume: 0" + b"\r\n"
         else:
@@ -767,12 +775,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
-        hexdump(res)
         self.wfile.write(res)
+        hexdump(res) if DEBUG else ''
 
     def do_SET_PARAMETER(self):
-        print("SET_PARAMETER %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         params_res = {}
         content_type = self.headers["Content-Type"]
         content_len = int(self.headers["Content-Length"])
@@ -784,48 +792,50 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 for p in params:
                     pp = p.split(b":")
                     if pp[0] == b"volume":
-                        print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
+                        SCR_LOG.info(f"SET_PARAMETER: {pp[0]} => {pp[1]}")
                         if not DISABLE_VM:
                             set_volume(float(pp[1]))
                         else:
-                            print("Volume Management is disabled")
-                    elif pp[0] == b"progress":
-                        print("SET_PARAMETER: %s => %s" % (pp[0], pp[1]))
-                    else:
-                        print("Ops SET_PARAMETER: %s" % p)
+                            SCR_LOG.warning("Volume Management is disabled")
+                    # elif pp[0] == b"progress":
+                        # startTimeStamp, currentTimeStamp, stopTimeStamp
+                        # SCR_LOG.info(pp[1].decode('utf8').lstrip(' ').split('/'))
+                    #     SCR_LOG.info(f"SET_PARAMETER: {pp[0]} => {pp[1]}")
+                    # else:
+                    #     SCR_LOG.info(f"Ops SET_PARAMETER: {p}")
         elif content_type == HTTP_CT_IMAGE:
             if content_len > 0:
                 fname = None
                 with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False, suffix=".jpg") as f:
                     f.write(self.rfile.read(content_len))
                     fname = f.name
-                print("Artwork saved to %s" % fname)
+                SCR_LOG.info(f"Artwork saved to {fname}")
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
-                parse_dxxp(self.rfile.read(content_len))
+                SCR_LOG.info(parse_dxxp(self.rfile.read(content_len)))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
 
     def do_RECORD(self):
-        print("RECORD %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
 
     def do_SETRATEANCHORTIME(self):
-        print("SETRATEANCHORTIME %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             try:
@@ -834,21 +844,21 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                     plist = readPlistFromString(body)
                     if plist["rate"] == 1:
-                        self.server.streams[0].audio_connection.send("play-%i" % plist["rtpTime"])
+                        self.server.streams[0].audio_connection.send(f"play-{plist['rtpTime']}")
                     if plist["rate"] == 0:
                         self.server.streams[0].audio_connection.send("pause")
-                    self.pp.pprint(plist)
+                    SCR_LOG.info(self.pp.pformat(plist))
             except IndexError:
                 # Fixes some disconnects
-                print('Cannot process request; streams torn down already.')
+                SCR_LOG.error('Cannot process request; streams torn down already.')
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
 
     def do_TEARDOWN(self):
-        print("TEARDOWN %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
@@ -860,7 +870,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     stream = self.server.streams[stream_id]
                     stream.teardown()
                     del self.server.streams[stream_id]
-                self.pp.pprint(plist)
+                SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -888,14 +898,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
          '...::...',
          '...']
         """
-        print("SETPEERS %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
 
             plist = readPlistFromString(body)
-            self.pp.pprint(plist)
+            SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -919,22 +929,22 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         #   'SupportsClockPortMatchingOverride': T/F}
 
         # SETPEERSX may require more logic when PTP is finished.
-        print("SETPEERSX %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
 
             plist = readPlistFromString(body)
-            self.pp.pprint(plist)
+            SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
 
     def do_FLUSH(self):
-        print("FLUSH %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f'{self.command}: {self.path}')
+        SCR_LOG.debug(self.headers)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -956,7 +966,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 if "params" in plist["params"] and "kMRMediaRemoteNowPlayingInfoArtworkData" in plist["params"]["params"]:
                     plist["params"]["params"]["kMRMediaRemoteNowPlayingInfoArtworkData"] = "<redacted ..too long>"
                 # don't print this massive blob - one day we may use it though.
-                # print(plist)  # self.pp.pprint(plist)
+                # SCR_LOG.debug(plist)  # SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -975,7 +985,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                SCR_LOG.info(self.pp.pformat(plist))
 
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -999,11 +1009,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 response = pf.fairplay_setup(pf_info, body)
             if op == 'auth':
                 plist = readPlistFromString(body)
-                self.pp.pprint(plist)
+                SCR_LOG.info(self.pp.pformat(plist))
                 if 'X-Apple-AT' in self.headers and self.headers["X-Apple-AT"] == '16':
                     # Use flags: 144037111597568 / 0x830040DF0A00
-                    print('Unhandled edge-case for unencrypted auth setup')
-            hexdump(body)
+                    SCR_LOG.error('Unhandled edge-case for unencrypted auth setup')
+            hexdump(body) if DEBUG else ''
 
         self.send_response(200)
         self.send_header("Content-Length", len(response))
@@ -1023,7 +1033,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers["Content-Length"]))
 
         if not self.server.hap:
-            self.server.hap = Hap(PI)
+            self.server.hap = Hap(PI, DEBUG)
         if op == 'verify':
             res = self.server.hap.pair_verify(body)
         elif op == 'setup':
@@ -1038,7 +1048,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(res)
 
         if self.server.hap.encrypted:
-            hexdump(self.server.hap.accessory_shared_key)
+            hexdump(self.server.hap.accessory_shared_key) if DEBUG else ''
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 
     def handle_pair_add(self):
@@ -1051,8 +1061,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.handle_pair_ARL('list')
 
     def handle_pair_ARL(self, op):
-        print("pair-%s %s" % (op, self.path))
-        print(self.headers)
+        SCR_LOG.info(f"pair-{op} {self.path}")
+        SCR_LOG.debug(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
@@ -1062,7 +1072,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 res = self.server.hap.pair_remove(body)
             elif op == 'list':
                 res = self.server.hap.pair_list(body)
-            hexdump(res)
+            hexdump(res) if DEBUG else ''
             self.send_response(200)
             self.send_header("Content-Type", self.headers["Content-Type"])
             self.send_header("Content-Length", len(res))
@@ -1081,13 +1091,13 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         hkac_s = 'Enable_HK_Access_Control'
         pw = ''
         pw_s = 'Password'
-        print("configure %s" % self.path)
-        print(self.headers)
+        SCR_LOG.info(f"configure {self.path}")
+        SCR_LOG.debug(self.headers)
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
             body = self.rfile.read(content_len)
             plist = readPlistFromString(body)
-            self.pp.pprint(plist)
+            SCR_LOG.info(self.pp.pformat(plist))
             if acl_s in plist[cd_s]:
                 # 0 == Everyone on the LAN
                 # 1 == Home members
@@ -1112,7 +1122,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             configure_info['Password'] = pw
 
         res = writePlistToString(configure_info)
-        self.pp.pprint(configure_info)
+        SCR_LOG.info(self.pp.pformat(configure_info))
 
         self.send_response(200)
         self.send_header("Content-Length", len(res))
@@ -1131,10 +1141,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     body = self.rfile.read(content_len)
 
                     plist = readPlistFromString(body)
-                    self.pp.pprint(plist)
+                    SCR_LOG.info(self.pp.pformat(plist))
                     if "qualifier" in plist and "txtAirPlay" in plist["qualifier"]:
-                        print("Sending:")
-                        self.pp.pprint(device_info)
+                        SCR_LOG.info('Sending our device info')
+                        SCR_LOG.debug(self.pp.pformat(device_info))
                         res = writePlistToString(device_info)
 
                         self.send_response(200)
@@ -1145,15 +1155,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(res)
                     else:
-                        print("No txtAirPlay")
+                        SCR_LOG.error("No txtAirPlay")
                         self.send_error(404)
                         return
                 else:
-                    print("No content")
+                    SCR_LOG.error("No content")
                     self.send_error(404)
                     return
             else:
-                print("Content-Type: %s | Not implemented" % self.headers["Content-Type"])
+                SCR_LOG.error(f"Content-Type: {self.headers['Content-Type']} | Not implemented")
                 self.send_error(404)
         else:
             res = writePlistToString(device_info)
@@ -1173,7 +1183,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.rfile = self.connection.makefile('rb', self.rbufsize)
         self.wfile = self.connection.makefile('wb')
         self.is_encrypted = True
-        print("----- ENCRYPTED CHANNEL -----")
+        SCR_LOG.debug("----- ENCRYPTED CHANNEL -----")
 
 
 def register_mdns(receiver_name):
@@ -1193,22 +1203,22 @@ def register_mdns(receiver_name):
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
-        "%s._airplay._tcp.local." % receiver_name,
+        f"{receiver_name}._airplay._tcp.local.",
         # addresses=[socket.inet_aton("127.0.0.1")],
         addresses=addresses,
         port=7000,
         properties=mdns_props,
-        server="%s.local." % receiver_name,
+        server=f"{receiver_name}.local.",
     )
 
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
     zeroconf.register_service(info)
-    print("mDNS service registered")
+    SCR_LOG.info("mDNS service registered")
     return (zeroconf, info)
 
 
 def unregister_mdns(zeroconf, info):
-    print("Unregistering...")
+    SCR_LOG.info("Unregistering...")
     zeroconf.unregister_service(info)
     zeroconf.close()
 
@@ -1238,7 +1248,7 @@ class AP2Server(socketserver.TCPServer):
     # Override
     def get_request(self):
         client_socket, client_addr = super().get_request()
-        print("Got connection with %s:%d" % client_addr)
+        SCR_LOG.info(f"Opened connection from {client_addr[0]}:{client_addr[1]}")
         self.connections[client_addr] = client_socket
         return (client_socket, client_addr)
 
@@ -1297,8 +1307,15 @@ if __name__ == "__main__":
         "-ftxor", nargs='+', type=int, metavar='F',
         help="Bitwise XOR toggle individual Airplay feature bits from the default. Use 0 for help.")
     parser.add_argument("--list-interfaces", help="Prints available network interfaces and exits.", action='store_true')
+    parser.add_argument("--debug", help="Prints extra debug message e.g. HTTP headers.", action='store_true')
 
     args = parser.parse_args()
+
+    DEBUG = args.debug
+    if DEBUG:
+        SCR_LOG = get_screen_logger('Receiver', level='DEBUG')
+    else:
+        SCR_LOG = get_screen_logger('Receiver', level='INFO')
 
     if args.list_interfaces:
         list_network_interfaces()
@@ -1319,12 +1336,13 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
+
     if args.features:
         # Old way. Leave for those who use this way.
         try:
             FEATURES = int(args.features, 16)
         except Exception:
-            print("[!] Error with feature arg - hex format required")
+            SCR_LOG.error("[!] Error with feature arg - hex format required")
             exit(-1)
 
     bitwise = args.ft or args.ftnot or args.ftor or args.ftxor or args.ftand
@@ -1350,13 +1368,13 @@ if __name__ == "__main__":
                     FEATURES |= Feat(flags)
                 elif args.ftxor:
                     FEATURES ^= Feat(flags)
-                print(f'Chosen features: {flags:016x}')
-                print(Feat(flags))
+                SCR_LOG.info(f'Chosen features: {flags:016x}')
+                SCR_LOG.info(Feat(flags))
             except Exception:
-                print("[!] Incorrect flags/mask.")
-                print(f"[!] Proceeding with defaults.")
-    print(f'Enabled features: {FEATURES:016x}')
-    print(FEATURES)
+                SCR_LOG.info("[!] Incorrect flags/mask.")
+                SCR_LOG.info(f"[!] Proceeding with defaults.")
+    SCR_LOG.info(f'Enabled features: {FEATURES:016x}')
+    SCR_LOG.info(FEATURES)
 
     DEVICE_ID = None
     IPV4 = None
@@ -1368,31 +1386,31 @@ if __name__ == "__main__":
     if ifen.get(ni.AF_INET6):
         IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
 
-    setup_global_structs(args)
+    setup_global_structs(args, isDebug=DEBUG)
 
     # Rudimentary check for whether v4/6 are still None (no IP found)
     if IPV4 is None and IPV6 is None:
-        print("[!] No IP found on chosen interface.")
+        SCR_LOG.fatal("[!] No IP found on chosen interface.")
         list_network_interfaces()
         exit(-1)
 
-    print("Interface: %s" % IFEN)
-    print("Mac: %s" % DEVICE_ID)
-    print("IPv4: %s" % IPV4)
-    print("IPv6: %s" % IPV6)
-    print()
+    SCR_LOG.info(f"Interface: {IFEN}")
+    SCR_LOG.info(f"Mac: {DEVICE_ID}")
+    SCR_LOG.info(f"IPv4: {IPV4}")
+    SCR_LOG.info(f"IPv6: {IPV6}")
+    SCR_LOG.info("")
 
     mdns = register_mdns(args.mdns)
-    print("Starting RTSP server, press Ctrl-C to exit...")
+    SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
         PORT = 7000
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
-                print("serving at port", PORT)
+                SCR_LOG.info(f"serving at port {PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
-                print("serving at port", PORT)
+                SCR_LOG.info(F"serving at port {PORT}")
                 httpd.serve_forever()
 
     except KeyboardInterrupt:
@@ -1401,5 +1419,5 @@ if __name__ == "__main__":
         # Weird client termination at the other end.
         pass
     finally:
-        print("Shutting down mDNS...")
+        SCR_LOG.info("Shutting down mDNS...")
         unregister_mdns(*mdns)

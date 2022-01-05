@@ -1,8 +1,97 @@
 import re
 import socket
 import logging
+import logging.config
 import platform
 import subprocess
+
+
+# This config needs amending for new modules and when adjusting existing ones.
+logging.config.dictConfig({
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '[%(name)s]: %(message)s'
+        },
+        'file': {
+            'format': '%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'NOTSET',
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+        'audiofile': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'formatter': 'file',
+            'filename': 'audio.debug.log',
+        },
+        'controlfile': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'formatter': 'file',
+            'filename': 'control.log',
+        },
+        'eventsfile': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'formatter': 'file',
+            'filename': 'events.log',
+        },
+
+    },
+    'loggers': {
+        'ap2.playfair': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'Audio.debug': {
+            'handlers': ['audiofile'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'Audio.Main': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'control': {
+            'handlers': ['controlfile'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'events': {
+            'handlers': ['eventsfile'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'HAP': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'Receiver': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'RTPBuffer': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        '': {
+            'handlers': ['console'],
+            'level': 'NOTSET',
+            'propagate': False
+        },
+    }
+})
 
 
 if platform.system() == "Windows":
@@ -14,15 +103,30 @@ if platform.system() == "Windows":
         print('[!] Pycaw is not installed - volume control will be unavailable', )
 
 
-def get_logger(name, level="INFO"):
-    logging.basicConfig(
-        filename="%s.log" % name,
-        filemode='a',
-        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S',
-        level=level
-    )
-    return logging.getLogger(name)
+def get_file_logger(name, level="INFO"):
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    # logger.propagate = False
+    formatter = logging.Formatter('%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s')
+    fh = logging.FileHandler(f'{name}.log', 'a')
+    fh.setFormatter(formatter)
+    sh = logging.StreamHandler()
+    if logger.hasHandlers():
+        print(f'removing StreamHandler from {name} file logger')
+        logger.removeHandler(sh)
+    logger.addHandler(fh)
+    if level == 'DEBUG':
+        print(f'[{name}] file logging level: {level}')
+    return logger
+
+
+def get_screen_logger(name, level="INFO"):
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.propagate = False
+    if level == 'DEBUG':
+        print(f'[{name}] logging level: {level}')
+    return logger
 
 
 def get_free_port():
@@ -121,11 +225,11 @@ def set_volume(vol):
     subsys = platform.system()
     if subsys == "Darwin":
         pct = int(interpolate(vol, -30, 0, 0, 100))
-        subprocess.run(["osascript", "-e", "set volume output volume %d" % pct])
+        subprocess.run(["osascript", "-e", f"set volume output volume {pct}"])
     elif subsys == "Linux":
         pct = int(interpolate(vol, -30, 0, 45, 100))
 
-        subprocess.run(["amixer", "set", "PCM", "%d%%" % pct])
+        subprocess.run(["amixer", "set", "PCM", f"{pct}%%"])
     elif subsys == "Windows":
         volume_session = get_pycaw_volume_session()
         if volume_session:

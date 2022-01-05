@@ -206,7 +206,9 @@ def parse_dxxp(chunk):
 
     if(len(chunk) > 0):
         # Define get frame
-        def get_next_frame(_in):
+        def get_next_frame(_in, buffer, rec=0):
+            rec += 1
+            # print(rec)
             if(len(_in) == 0):
                 """
                 return when we reached the last frame.
@@ -214,7 +216,7 @@ def parse_dxxp(chunk):
                  to sys.setrecursionlimit(sys.getrecursionlimit()+1) here, but
                  the tradeoff is larger stack size.
                 """
-                return
+                return buffer
             # trigger KeyError if we dont know the Code type:
             code, _typ = '', ''
             # start 4, end 8
@@ -237,13 +239,14 @@ def parse_dxxp(chunk):
             # start 8, end 8 + leng
             data = _in[8:8 + leng]
             # print('data:', data)
+            # print('leng:', leng)
 
             if(leng == 0 and _typ  == (Type.Boolean)):
                 # In case Boolean has length 0
-                print(code, ':', False)
+                buffer += f'{code}: {False}'
             elif(leng == 0):
                 # skip it
-                pass
+                buffer += ''
             # Non-zero data usually interesting. Tiring to examine lots of default (0) values.
             # iTunes sends ~100 values, wherein usually about ~25 are set to anything meaningful.
             # This elif clause will also ignore Booleans set to False (0).
@@ -251,51 +254,70 @@ def parse_dxxp(chunk):
                 # print('fr_length:', leng)
                 # print('fr_data:', data)
                 if(code == (Code.mlit or Code.msrv or Code.mdcl)):
-                    get_next_frame(data)
+                    value = get_next_frame(data, buffer, rec)
+                    if value is not None:
+                        return value
 
                 elif(code == Code.caps):
-                    print(code, ':', PlayState(get_int(data)))
+                    # print('in1', rec)
+                    buffer += f'{code}: {PlayState(get_int(data))}\n'
 
                 elif(code == Code.ascr):
-                    print(code, ':', Rating(get_int(data)))
+                    # print('in2', rec)
+                    buffer += f'{code}: {Rating(get_int(data))}\n'
 
                 elif(_typ == (Type.Boolean)):
-                    print(code, ':', bool(get_int(data)))
+                    # print('in3', rec)
+                    buffer += f'{code}: {bool(get_int(data))}\n'
 
                 elif(_typ == (Type.UInt8 or Type.UInt16 or Type.UInt32)):
-                    print(code, ':', get_int(data))
+                    # print('in4', rec)
+                    buffer += f'{code}: {get_int(data)}\n'
 
                 elif(_typ == (Type.SInt8 or Type.SInt16 or Type.SInt32)):
-                    print(code, ':', get_int(data))
+                    # print('in5', rec)
+                    buffer += f'{code}: {get_int(data)}\n'
 
                 elif(_typ == (Type.UInt64 or Type.SInt64)):
+                    # print('in6', rec)
                     if 'id' in code.value['inst']:
-                        print(code, ':', f'0x{get_int(data[0:leng]):016x}')
+                        # print('in6a', rec)
+                        buffer += f'{code}: 0x{get_int(data[0:leng]):016x}\n'
                     else:
-                        print(code, ':', get_int(data[0:leng]))
+                        # print('in6b', rec)
+                        buffer += f'{code}: {get_int(data[0:leng])}\n'
                 elif(_typ == Type.UTF8Chars):
                     # Just .decode() is OK
-                    print(code, ':', data.decode('utf-8'))
+                    # print('in7', rec)
+                    buffer += f'{code}: {data.decode("utf-8")}\n'
 
                 elif(_typ == Type.Date):
                     # Parse a date into UTC
-                    print(code, ':', datetime.fromtimestamp(get_int(data)))
+                    # print('in8', rec)
+                    buffer += f'{code}: {datetime.fromtimestamp(get_int(data))}\n'
 
                 elif(_typ == Type.Version):
-                    print(code, ':', f'{get_int(data[0:2])}.{get_int(data[2:4])}')
+                    # print('in9', rec)
+                    buffer += f'{code}: {get_int(data[0:2])}.{get_int(data[2:4])}\n'
 
                 elif(_typ == Type.Float32):
+                    # print('in10', rec)
                     pass
 
                 elif(_typ == Type.Custom):
+                    # print('in11', rec)
                     pass
+
+                else:
+                    return buffer
 
             # get subsequent frame (recursive)
             # start 8 + leng
-            get_next_frame(_in[8 + leng:])
+            value = get_next_frame(_in[8 + leng:], buffer, rec)
+            if value is not None:
+                return value
 
         # Commence parsing
-        get_next_frame(chunk)
+        return 'DMAP:\n' + get_next_frame(chunk, '', 0)
 
-        # empty line delineate output.
-        print()
+    # empty line delineate output.

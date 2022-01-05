@@ -3,6 +3,7 @@ from Crypto.Hash import SHA1
 from Crypto.PublicKey import RSA
 from Crypto import Random
 import base64
+from .utils import get_screen_logger
 
 
 AIRPORT_PRIVATE_KEY = (
@@ -32,8 +33,9 @@ AIRPORT_PRIVATE_KEY = (
 )
 
 
-class FPAES():
+class FairPlayAES():
     def __init__(self, fpaeskey=None, rsaaeskey=None, aesiv=None):
+        self.logger = get_screen_logger(__name__, 'DEBUG')
         if rsaaeskey:
             airportkey = RSA.importKey(AIRPORT_PRIVATE_KEY)
             cipher = PKCS1_OAEP.new(airportkey)
@@ -41,7 +43,7 @@ class FPAES():
             binkey = base64.standard_b64decode(rsaaeskey + '==')
             self.aeskey = cipher.decrypt(binkey)
             if len(self.aeskey) == 16:
-                print('Got RSA AES key')
+                self.logger.info('Got RSA AES key')
             """
             Decoded keys look like (length 256 bytes):
             '\xbf\x92\xc0k-N\xb5\xdf\xbfwM\xda\xc0\xb0\xf1K\xe8\xab4\x83\xd4:V'
@@ -59,7 +61,7 @@ class FPAES():
             """
 
         else:
-            print('Got FP AES key: Cannot yet decrypt.')  # , fpaeskey)
+            self.logger.info('Got FP AES key: Cannot yet decrypt.')  # , fpaeskey)
             self.aeskey = base64.standard_b64decode(fpaeskey)
             # TODO: Now decode/decrypt the AES key...
             """
@@ -72,7 +74,7 @@ class FPAES():
             self.aeskey = self.aeskey[16:48]
         self.aesiv = base64.standard_b64decode(aesiv + '==')
         if len(self.aesiv) == 16:
-            print('Got AES IV')
+            self.logger.info('Got AES IV')
 
     # @property
     def aesiv(self):
