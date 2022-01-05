@@ -23,8 +23,8 @@ class EventGeneric:
         if self.isDebug:
             self.logger = get_file_logger(self.name, level="DEBUG")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        addr = (self.addr, self.port)
-        sock.bind(addr)
+        local_addr_port = (self.addr, self.port)
+        sock.bind(local_addr_port)
         sock.listen(1)
 
         try:
@@ -48,7 +48,7 @@ class EventGeneric:
                     pass
                 conn.close()
                 if self.isDebug:
-                    self.logger.debug(f"Close connection to {addr[0]}:{addr[1]}")
+                    self.logger.debug(f"Close connection from {addr[0]}:{addr[1]}")
             sock.close()
         except KeyboardInterrupt:
             pass
@@ -57,7 +57,7 @@ class EventGeneric:
         finally:
             sock.close()
             if self.isDebug:
-                self.logger.debug(f"Close connection to {addr[0]}:{addr[1]}")
+                self.logger.debug(f"Closed listen on {self.addr}:{self.port}")
 
     # Note that exit handlers and finally clauses, etc., will not be executed.
     # def terminate(self):
