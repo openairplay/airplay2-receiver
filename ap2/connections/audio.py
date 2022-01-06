@@ -383,7 +383,7 @@ class Audio:
                 self.audio_screen_logger.error(f'RTP AES MODE_CBC decrypt: {repr(e)}')
         else:
             c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
-            c.update(rtp.aad)
+            c.update(rtp.aad)  # necessary at least for RTP type 103.
             try:
                 data = c.decrypt_and_verify(rtp.payload, rtp.tag)
             except ValueError as e:
@@ -615,9 +615,12 @@ class AudioBuffered(Audio):
                         self.ab_screen_logger.debug("server: ontime data request received")
                         pending_ontime_data_request = True
 
+                # Receive RTP packets from the TCP stream:
                 message = conn.recv(2, socket.MSG_WAITALL)
                 if message:
+                    # Each RTP packet is preceeded by a uint16 of its size
                     data_len = int.from_bytes(message, byteorder='big')
+                    # Then the RTP packet:
                     data = conn.recv(data_len - 2, socket.MSG_WAITALL)
 
                     rtp = RTP_BUFFERED(data)

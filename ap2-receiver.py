@@ -84,10 +84,10 @@ class Feat(IntFlag):
     # Feat12: iTunes4Win ends ANNOUNCE with rsaaeskey, does not attempt FPLY auth.
     # also coerces frequent OPTIONS packets (keepalive) from iPhones.
     Ft12FPSAPv2p5_AES_GCM = 0x0000000000001000  # 1<<12
-    # 13-14 seem to be MFi stuff. 13: prevents assoc.
+    # 13-14 MFi stuff.
     Ft13MFiHardware      = 0x0000000000002000  # 1<<13
     # Music on iPhones needs this to stream audio
-    Ft14MFiSoftware      = 0x0000000000004000  # 1<<14
+    Ft14MFiSoft_FairPlay = 0x0000000000004000  # 1<<14
     # 15-17 not mandatory - faster pairing without
     Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
     Ft16AudioMetaProgres = 0x0000000000010000  # 1<<16
@@ -101,8 +101,8 @@ class Feat(IntFlag):
     Ft21Unknown          = 0x0000000000200000  # 1<<21
     # Try Ft22 without Ft40 - ANNOUNCE + SDP
     Ft22AudioUnencrypted = 0x0000000000400000  # 1<<22
-    Ft23RSAAuth          = 0x0000000000800000  # 1<<23
-    # Unknown             = #1<<24-#1<<25
+    Ft23RSA_Auth         = 0x0000000000800000  # 1<<23
+    Ft24Unknown          = 0x0000000001000000  # 1<<24
     # Pairing stalls with longer /auth-setup string w/26
     # Ft25 seems to require ANNOUNCE
     Ft25iTunes4WEncrypt  = 0x0000000002000000  # 1<<25
@@ -120,6 +120,7 @@ class Feat(IntFlag):
     Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
     # Ft36Unknown          = 0x0000001000000000  # 1<<36
     Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
+    # 38 seems to be implicit with other flags; works with or without 38.
     Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
     # 40 absence: requires ANNOUNCE method
     Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
@@ -129,7 +130,7 @@ class Feat(IntFlag):
     Ft43SystemPairing    = 0x0000080000000000  # 1<<43
     Ft44APValeriaScrSend = 0x0000100000000000  # 1<<44
     # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
-    # 45 triggers stream type:96 - 41, stream type:103
+    # 45 triggers stream type:96 (without ft41, PTP)
     Ft45_NTPClock        = 0x0000200000000000  # 1<<45
     Ft46HKPairing        = 0x0000400000000000  # 1<<46
     Ft47PeerMgmt         = 0x0000800000000000  # 1<<47
@@ -158,7 +159,7 @@ class Feat(IntFlag):
 #     | Feat.Ft30UnifiedAdvertInf | Feat.Ft22AudioUnencrypted
 #     | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
 #     | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
-#     | Feat.Ft14MFiSoftware | Feat.Ft11AudExtra | Feat.Ft09AirPlayAudio
+#     | Feat.Ft14MFiSoft_FairPlay | Feat.Ft11AudExtra | Feat.Ft09AirPlayAudio
 # )
 
 FEATURES = (
@@ -171,7 +172,7 @@ FEATURES = (
     | Feat.Ft17AudioMetaTxtDAAP
     | Feat.Ft16AudioMetaProgres
     # | Feat.Ft15AudioMetaCovers
-    | Feat.Ft14MFiSoftware | Feat.Ft09AirPlayAudio
+    | Feat.Ft14MFiSoft_FairPlay | Feat.Ft09AirPlayAudio
 )
 
 
