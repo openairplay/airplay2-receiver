@@ -4,6 +4,7 @@ from Crypto.PublicKey import RSA
 from Crypto import Random
 import base64
 from .utils import get_screen_logger
+from ap2.fairplay3 import Fairplay3
 
 
 AIRPORT_PRIVATE_KEY = (
@@ -56,6 +57,7 @@ class FairPlayAES():
             if len(self.aeskey) == 16:
                 self.logger.info('Got RSA AES key (base64)')
         elif fpaeskeyb64:
+            self.fairplay3 = Fairplay3()
             self.logger.info('Got FP AES key (base64)')
             self.aeskey = decodeb64(fpaeskeyb64)
             """
@@ -63,12 +65,12 @@ class FairPlayAES():
             'FPLY...'
             Note: they are not yet decrypted (MFi)
             """
-            # Just to keep the Audio module happy later with a 32 byte key size.
-            self.aeskey = self.aeskey[16:48]
+            # Now decrypt the AES key:
+            self.aeskey = self.fairplay3.decryptAESKey(keymsg, self.aeskey)
         elif fpaeskey:
-            # Just to keep the Audio module happy later with a 32 byte key size.
-            self.aeskey = fpaeskey[16:48]
+            self.fairplay3 = Fairplay3()
             self.logger.info('Got FP AES key')
+            self.aeskey = self.fairplay3.decryptAESKey(keymsg, fpaeskey)
 
         # Handle AES IV
         if aesivb64:
