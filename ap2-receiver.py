@@ -497,7 +497,7 @@ class SDPHandler():
 
 
 class AP2Handler(http.server.BaseHTTPRequestHandler):
-    aeskeys = None
+    aeskeyobj = None
     pp = pprint.PrettyPrinter()
     ntp_port, ptp_port = 0, 0
     ntp_proc, ptp_proc = None, None
@@ -622,11 +622,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         self.send_response(404)
                         self.server.hap = None
                     else:
-                        if sdp.has_fp:
-                            # SCR_LOG.debug('Got FP AES Key from SDP')
-                            self.aeskeys = FairPlayAES(fpaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                        if sdp.has_fp and self.fairplay_keymsg:
+                            self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
                         elif sdp.has_rsa:
-                            self.aeskeys = FairPlayAES(rsaaeskey=sdp.aeskey, aesiv=sdp.aesiv)
+                            self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
                         self.send_response(200)
                         self.send_header("Server", self.version_string())
                         self.send_header("CSeq", self.headers["CSeq"])
@@ -673,8 +672,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 'latencyMin': int(self.sdp.minlatency),
                 'latencyMax': int(self.sdp.maxlatency),
                 'ct': 0,  # Compression Type(?)
-                'shk': self.aeskeys.aeskey,
-                'shiv': self.aeskeys.aesiv,
+                'shk': self.aeskeyobj.aeskey,
+                'shiv': self.aeskeyobj.aesiv,
                 'spf': int(self.sdp.spf),  # sample frames per pkt
                 'type': int(self.sdp.payload_type),
                 'controlPort': 0,
@@ -722,6 +721,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 SCR_LOG.debug(self.pp.pformat(plist))
+                if 'eiv' in plist and 'ekey' in plist:
+                    self.aesiv = plist['eiv']
+                    self.aeskey = plist['ekey']
+                    self.aeskeyobj = FairPlayAES(fpaeskey=self.aeskey, aesiv=self.aesiv, keymsg=self.fairplay_keymsg)
+
                 if "streams" not in plist:
                     SCR_LOG.debug("Sending EVENT:")
                     event_port, self.event_proc = EventGeneric.spawn(
@@ -1022,7 +1026,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         response = b''
         content_len = int(self.headers["Content-Length"])
         if content_len > 0:
-            body = self.rfile.read(content_len)
+            # This is the session fairplay_keymsg (168 bytes long)
+            self.fairplay_keymsg = body = self.rfile.read(content_len)
+
             if op == 'fp':
                 pf = PlayFair()
                 pf_info = PlayFair.fairplay_s()

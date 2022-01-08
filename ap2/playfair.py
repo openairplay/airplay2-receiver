@@ -34,108 +34,54 @@ AIRPORT_PRIVATE_KEY = (
 
 
 class FairPlayAES():
-    def __init__(self, fpaeskey=None, rsaaeskey=None, aesiv=None):
+    def __init__(self,
+                 rsaaeskeyb64=None,  # either RSA
+                 fpaeskeyb64=None, aesivb64=None,  # or b64 encoded key+iv
+                 fpaeskey=None, aesiv=None,  # or binary key+iv
+                 keymsg=None,  # Needed to decrypt the FP AES keys
+                 ):
         self.logger = get_screen_logger(__name__, 'DEBUG')
-        if rsaaeskey:
+        if rsaaeskeyb64:
             airportkey = RSA.importKey(AIRPORT_PRIVATE_KEY)
             cipher = PKCS1_OAEP.new(airportkey)
 
-            binkey = base64.standard_b64decode(rsaaeskey + '==')
+            binkey = self.decodeb64(rsaaeskeyb64)
+            """
+            Decoded RSA keys are 256 bytes
+            """
             self.aeskey = cipher.decrypt(binkey)
+            """
+            AES keys obtained are 16 bytes
+            """
             if len(self.aeskey) == 16:
-                self.logger.info('Got RSA AES key')
+                self.logger.info('Got RSA AES key (base64)')
+        elif fpaeskeyb64:
+            self.logger.info('Got FP AES key (base64)')
+            self.aeskey = self.decodeb64(fpaeskeyb64)
             """
-            Decoded keys look like (length 256 bytes):
-            '\xbf\x92\xc0k-N\xb5\xdf\xbfwM\xda\xc0\xb0\xf1K\xe8\xab4\x83\xd4:V'
-            '\xc6dS#\xe3\xce\xd3?E\xe2x\xc5\x1e\x9e\xd0\xc6\x028\x90\xa76\x1f~'
-            '\xa7j\xbcuH\x16\xbe\xb9\x1c\xd7\xb7\xd5X\x8b\x81\x9d\xa0\x82\xd4\'
-            '\\x1a\x81\xf5\xa0R\xc2|H\xc4\xca\x1d\xef\xd0\x1b\xd6&\xc3\xb9P`i'
-            '\xa6r\x97\xd2\x0e^\xa7\xa8\x9aHa\x06\x91\x04J(\x08\xa4P\xf9C\x7f'
-            '\x15\xee\xa8|\x1b\xcb\xc9\xd1\xc7\xa1\xcc\x95\xef-+;\xbb\x8e$\xcax'
-            '\x8a\xeb\xbf;\xdf\xc8\xa8)\xe6\x17jp\x85O7i\xd4A=\x9a\xaeEb\x92\x9f'
-            '\x95\xce\xb3\xf6\x82\xb8d\x1d\xe1o;\xce\x81\x90\xe6lC\xa7\x0b\xd4'
-            '\xc6@\x8dN\xe9"\xf5.p\xd8\xde\x97`~~\xd3\xe8=\xa1\x88\\\x04\xfb\x0c'
-            '\xd9Y\xb5\x0b\x05\xdd\x8dz2M\x1e\xa90\xfbQ6$\xa1\xf7\x05\x01[\xa0^'
-            '\x1e\xf2G\xf2$\x8a$&\xaa\xc5\xaf\xd8\xa9p\xbb\x9b\x95\x9b\'\xf4@.o7'
-            '\x91\x1c\xbb\x1a\xbb\xec\x1a3\x96'
-            """
-
-        else:
-            self.logger.info('Got FP AES key: Cannot yet decrypt.')  # , fpaeskey)
-            self.aeskey = base64.standard_b64decode(fpaeskey)
-            # TODO: Now decode/decrypt the AES key...
-            """
-            Decoded keys look like (length 72 bytes):
-            'FPLY\x01\x02\x01\x00\x00\x00\x00<\x00\x00\x00\x00\xe4\x90V\xc8\xf2%'
-            '\xebP:k\xe3\xd41\xe8\xa7{\x00\x00\x00\x10\xbfs\xc8\xb0\x9c\x9b7\xe8Fb#'
-            '\xbfN\xa6\xa7\xa5I\x9cW\xe6\x0b\xf6GC\x8f\xd2\xbb\x7f@3s\xef\x06i2\x7f'
+            Decoded AES keys are 72 bytes long starting:
+            'FPLY...'
+            Note: they are not yet decrypted (MFi)
             """
             # Just to keep the Audio module happy later with a 32 byte key size.
             self.aeskey = self.aeskey[16:48]
-        self.aesiv = base64.standard_b64decode(aesiv + '==')
-        if len(self.aesiv) == 16:
+        elif fpaeskey:
+            # Just to keep the Audio module happy later with a 32 byte key size.
+            self.aeskey = fpaeskey[16:48]
+            self.logger.info('Got FP AES key')
+
+        # Handle AES IV
+        if aesivb64:
+            self.aesiv = self.decodeb64(aesivb64)
+            self.logger.info('Got AES IV (base64)')
+        elif aesiv:
+            self.aesiv = aesiv
             self.logger.info('Got AES IV')
 
-    # @property
-    def aesiv(self):
-        return self.aesiv
+    def decodeb64(self, _input):
+        return base64.standard_b64decode(_input + '==')
 
-    # @aesiv.setter
-    # def aesiv(self, _val):
-    #     self.aesiv = _val
-
-    # @property
-    def aeskey(self):
-        return self.aeskey
-
-    # @aeskey.setter
-    # def aeskey(self, _val):
-    #     self.aeskey = _val
-
-
-""" FOR FAIRPLAY
-if (fpaeskeystr) {
-   unsigned char fpaeskey[72];
-   int fpaeskeylen;
-
-   fpaeskeylen = rsakey_decode(conn->raop->rsakey, fpaeskey, sizeof(fpaeskey), fpaeskeystr);
-   if (fpaeskeylen > 0) {
-    fairplay_decrypt(conn->fairplay, fpaeskey, aeskey);
-    aeskeylen = sizeof(aeskey);
-   }
-  }
-
-input key is 72 bytes
-output msg is 16 bytes
-
-void generate_key_schedule(unsigned char* key_material, uint32_t key_schedule[11][4]);
-void generate_session_key(unsigned char* oldSap, unsigned char* messageIn, unsigned char* sessionKey);
-void cycle(unsigned char* block, uint32_t key_schedule[11][4]);
-void z_xor(unsigned char* in, unsigned char* out, int blocks);
-void x_xor(unsigned char* in, unsigned char* out, int blocks);
-
-extern unsigned char default_sap[];
-
-void playfair_decrypt(unsigned char* message3, unsigned char* cipherText, unsigned char* keyOut)
-{
-  unsigned char* chunk1 = &cipherText[16];
-  unsigned char* chunk2 = &cipherText[56];
-  int i;
-  unsigned char blockIn[16];
-  unsigned char sapKey[16];
-  uint32_t key_schedule[11][4];
-  generate_session_key(default_sap, message3, sapKey);
-  generate_key_schedule(sapKey, key_schedule);
-  z_xor(chunk2, blockIn, 1);
-  cycle(blockIn, key_schedule);
-  for (i = 0; i < 16; i++) {
-    keyOut[i] = blockIn[i] ^ chunk1[i];
-  }
-  x_xor(keyOut, keyOut, 1);
-  z_xor(keyOut, keyOut, 1);
-}
-
-"""
+# ===========
 
 
 class PlayFair:
