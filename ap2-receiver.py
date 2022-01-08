@@ -696,7 +696,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             ctl_msg = f"control_port={streamobj.control_port}"
             res.append(ctl_msg)
             SCR_LOG.debug(ctl_msg)
-            data_msg = f"data_port={streamobj.data_port}"
+            data_msg = f"server_port={streamobj.data_port}"
             res.append(data_msg)
             SCR_LOG.debug(data_msg)
             ntp_msg = f"timing_port={timing_port}"
