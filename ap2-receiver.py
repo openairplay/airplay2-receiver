@@ -74,7 +74,7 @@ class Feat(IntFlag):
     Ft03VideoVolumeCtrl  = 0x0000000000000008  # 1<<3
     Ft04VideoHTTPLiveStr = 0x0000000000000010  # 1<<4
     Ft05Slideshow        = 0x0000000000000020  # 1<<5
-    # Ft06 = 0x40  # 1<<6
+    Ft06_Unknown         = 0x0000000000000040  # 1<<6
     Ft07ScreenMirroring  = 0x0000000000000080  # 1<<7
     Ft08ScreenRotate     = 0x0000000000000100  # 1<<8
     # Ft09 is necessary for iPhones/Music: audio
@@ -110,6 +110,7 @@ class Feat(IntFlag):
     Ft26AudioMfi         = 0x0000000004000000  # 1<<26
     # 27: connects and works OK
     Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
+    Ft28_Unknown         = 0x0000000010000000  # 1<<28
     Ft29plistMetaData    = 0x0000000020000000  # 1<<29
     Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
     # Reserved?           =  # 1<<31
@@ -1365,6 +1366,8 @@ if __name__ == "__main__":
         # Old way. Leave for those who use this way.
         try:
             FEATURES = int(args.features, 16)
+            SCR_LOG.info(f"Features:")
+            SCR_LOG.info(Feat(FEATURES))
         except Exception:
             SCR_LOG.error("[!] Error with feature arg - hex format required")
             exit(-1)
