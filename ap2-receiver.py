@@ -20,6 +20,7 @@ from zeroconf import IPVersion, ServiceInfo, Zeroconf
 from biplist import readPlistFromString, writePlistToString
 
 from ap2.playfair import PlayFair, FairPlayAES
+from ap2.airplay1 import AP1Security
 from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
 from ap2.pairing.hap import Hap, HAPSocket
 from ap2.connections.event import EventGeneric
@@ -491,6 +492,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
+
+        # iTuneshdr = "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER"
+        if "Apple-Challenge" in self.headers:
+            # Build Apple-Reponse
+            apple_response = AP1Security.compute_apple_response(self.headers["Apple-Challenge"], IPADDR_BIN, DEVICE_ID_BIN)
+            self.send_header("Apple-Jack-Status", "connected; type=analog")
+            self.send_header("Apple-Response", apple_response)
+            # self.send_header("Public",
+            #                  iTuneshdr
+            #                  )
         self.send_header("Public",
                          "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH"
                          "FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT"
