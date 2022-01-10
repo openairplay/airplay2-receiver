@@ -180,6 +180,34 @@ FEATURES = (
 )
 
 
+class StatusFlags(IntFlag):
+    StatusNone         = 0x00000  # 0
+    ProblemsExist      = 0x00001  # 1<< 0
+    # Probably a WAC (wireless accessory ctrl) thing:
+    Unconfigured       = 0x00002  # 1<< 1
+    # Audio cable attached (legacy): all is well.
+    AudioLink          = 0x00004  # 1<< 2
+    PINmode            = 0x00008  # 1<< 3
+    PINentry           = 0x00010  # 1<< 4
+    PINmatch           = 0x00020  # 1<< 5
+    StatusUnknown6     = 0x00040  # 1<< 6
+    # Need password to use
+    PasswordNeeded     = 0x00080  # 1<< 7
+    StatusUnknown8     = 0x00100  # 1<< 8
+    # need PIN to pair
+    PairingPIN         = 0x00200  # 1<< 9
+    # was set up for HK Access ctrl
+    HKAccessControl    = 0x00400  # 1<<10
+    # RCR opens up interesting behaviours
+    RemoteControlRelay = 0x00800  # 1<<11
+
+
+STATUS_FLAGS = (
+    StatusFlags.AudioLink
+    # we must handle stream type 130 for RCR
+    # | StatusFlags.RemoteControlRelay
+)
+
 # PI = Public ID (can be GUID, MAC, some string)
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
 DEBUG = False
@@ -230,6 +258,19 @@ HTTP_X_A_ET = "X-Apple-ET"  # Encryption Type
 AIRPLAY_BUFFER = 8388608  # 0x800000 i.e. 1024 * 8192 - how many CODEC frame size 1024 we can hold
 
 
+def get_hex_bitmask(in_features):
+    """
+    prepares the feature bits into text form
+    """
+    if in_features.bit_length() <= 32:
+        # print(f"{hex(in_features)}")
+        return f"{hex(in_features)}"
+    else:
+        # print(f'feature bit length: {in_features.bit_length()} ')
+        # print(f"{hex(in_features & 0xffffffff)},{hex(in_features >> 32 & 0xffffffff)}")
+        return f"{hex(in_features & 0xffffffff)},{hex(in_features >> 32 & 0xffffffff)}"
+
+
 def setup_global_structs(args, isDebug=False):
     global device_info
     global device_setup
@@ -267,7 +308,8 @@ def setup_global_structs(args, isDebug=False):
         ],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
-        'features': FEATURES,
+        # features: can send in hex() also
+        'features': int(FEATURES),
         # 'features': 496155769145856, # Sonos One
         # 'firmwareBuildDate': 'Nov  5 2019',
         # 'firmwareRevision': '53.3-71050',
@@ -282,7 +324,7 @@ def setup_global_structs(args, isDebug=False):
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': '366.0',
-        'statusFlags': 4,
+        'statusFlags': get_hex_bitmask(STATUS_FLAGS),
         # 'statusFlags': 0x404 # Sonos One
     }
 
@@ -329,9 +371,9 @@ def setup_global_structs(args, isDebug=False):
         "acl": "0",
         "deviceid": DEVICE_ID,  # device MAC addr
         # Features, aka ft - see Feat class.
-        "features": f"{hex(FEATURES & 0xffffffff)},{hex(FEATURES >> 32 & 0xffffffff)}",
-        "flags": "0x4",
+        "features": get_hex_bitmask(FEATURES),
         # flags (bitmask)
+        "flags": get_hex_bitmask(STATUS_FLAGS),
         # Group Contains Group Leader.
         "gcgl": "0",
         # Group UUID (generated casually)
@@ -377,7 +419,7 @@ def setup_global_structs(args, isDebug=False):
         # -This requires Method POST Path /pair-pin-start endpoint
         # "pw": "false",
         # Status Flags (bitmask): see StatusFlags class.
-        # "sf": "0x4",
+        # "sf": get_hex_bitmask(STATUS_FLAGS),
         # Software Mute (whether needed)
         # "sm": "false",
         # Sample Rate
