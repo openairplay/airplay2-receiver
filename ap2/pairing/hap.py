@@ -283,6 +283,9 @@ class LTSK(CRUD_Store):
 class LTPK():
     # Long Term Public Key - get it from the hap module.
     def __init__(self, _id, isDebug=False):
+        # Ensure the identifier string is binary (utf8)
+        if not isinstance(_id, (bytes, bytearray)):
+            _id = _id.encode('utf8')
         announce_id, self.ltpk = Hap(_id, isDebug).configure()
         self.public_int = int.from_bytes(self.ltpk, byteorder='big')
         # builds a 64 char hex string, for the 32 byte pub key
@@ -307,6 +310,9 @@ class Hap:
             self.logger = get_screen_logger('HAP', level='DEBUG')
         else:
             self.logger = get_screen_logger('HAP', level='INFO')
+        # Ensure the identifier string is binary (utf8)
+        if not isinstance(identifier, (bytes, bytearray)):
+            identifier = identifier.encode('utf8')
 
         """
         TODO: controller_id is (meant to be) evident from the HAP connection,
