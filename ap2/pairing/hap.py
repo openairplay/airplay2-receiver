@@ -322,7 +322,7 @@ class Hap:
         self.ltsk = LTSK(self.accessory_pairing_id)
 
         if self.ltsk.has_entry(self.accessory_pairing_id):
-            self.logger.debug(f'Loading ed25519 keypair for {self.accessory_pairing_id.decode("utf-8")}')
+            self.logger.debug(f'Loading ed25519 keypair for own ID: {self.accessory_pairing_id.decode("utf-8")}')
             self.accessory_ltsk = ed25519.Ed25519PrivateKey.from_private_bytes(
                 self.ltsk.get_ltsk(self.accessory_pairing_id)
             )
@@ -337,7 +337,7 @@ class Hap:
 
         else:
             # Generate new private+public key pair
-            self.logger.debug('Generating new ed25519 keypair for', self.accessory_pairing_id)
+            self.logger.debug(f'Generating new ed25519 keypair for own ID: {self.accessory_pairing_id}')
 
             # NaCl way of doing it:
             # accessory_secret = random(nacl.bindings.crypto_sign_SEEDBYTES)
