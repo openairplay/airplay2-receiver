@@ -44,6 +44,8 @@ DEVICE_ID = None
 # The chosen interface's IPv4/6
 IPV4 = None
 IPV6 = None
+# Globally assign the device name provided from the command line
+APNAME = None
 
 # SERVER_VERSION; presence/absence, and possibly value dictates some client behaviour
 SERVER_VERSION = "366.0"
@@ -123,7 +125,7 @@ def setup_global_structs(args, isDebug=False):
         'keepAliveSendStatsAsBody': True,
         'manufacturer': 'OpenAirplay',
         'model': 'Receiver',
-        'name': args.mdns,
+        'name': APNAME,
         'nameIsFactoryDefault': False,
         'pi': PI.decode(),  # UUID generated casually..
         'protocolVersion': '1.1',
@@ -187,7 +189,7 @@ def setup_global_structs(args, isDebug=False):
         # "isGroupLeader": "0",
         # "manufacturer": "Pino",
         "model": "Airplay2-Receiver",
-        # "name": "GINO",
+        "name": APNAME,
         "protovers": "1.1",
         # Required Sender Features (bitmask)
         "rsf": "0x0",
@@ -1013,7 +1015,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         acl_s = 'Access_Control_Level'
         acl = 0
         cd_s = 'ConfigurationDictionary'
-        dn = 'NEWBORNE'
+        dn = APNAME
         dn_s = 'Device_Name'
         hkac = False
         hkac_s = 'Enable_HK_Access_Control'
@@ -1268,6 +1270,7 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
+    APNAME = args.mdns
 
     if args.features:
         # Old way. Leave for those who use this way.
@@ -1337,7 +1340,7 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    mdns = register_mdns(DEVICE_ID, args.mdns, [IP4ADDR_BIN, IP6ADDR_BIN])
+    mdns = register_mdns(DEVICE_ID, APNAME, [IP4ADDR_BIN, IP6ADDR_BIN])
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
