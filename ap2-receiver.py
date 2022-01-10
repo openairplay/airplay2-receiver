@@ -95,8 +95,8 @@ def setup_global_structs(args, isDebug=False):
     global device_setup_data
     global second_stage_info
     global mdns_props
-    global LTPK
-    LTPK = LTPK(PI, isDebug)
+    global LTPK_OBJ
+    LTPK_OBJ = LTPK(PI, isDebug)
 
     device_info = {
         # 'OSInfo': 'Linux 3.10.53',
@@ -220,7 +220,7 @@ def setup_global_structs(args, isDebug=False):
         # Pairing UUID (generated casually)
         "pi": PI.decode(),
         # Ed25519 PubKey
-        "pk": LTPK.get_pub_string(),
+        "pk": LTPK_OBJ.get_pub_string(),
         # "protovers": "1.1",
         # PassWord enabled: 0/false off, 1/true on.
         # -This requires Method POST Path /pair-pin-start endpoint
