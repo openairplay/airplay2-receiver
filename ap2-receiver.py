@@ -1299,7 +1299,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         SCR_LOG.debug("----- ENCRYPTED CHANNEL -----")
 
 
-def register_mdns(receiver_name):
+def register_mdns(mac, receiver_name, addresses):
+    """
     addresses = []
     for ifen in ni.interfaces():
         ifenaddr = ni.ifaddresses(ifen)
@@ -1313,15 +1314,15 @@ def register_mdns(receiver_name):
                 ni.AF_INET6,
                 ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0])
             )
+    """
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
         f"{receiver_name}._airplay._tcp.local.",
-        # addresses=[socket.inet_aton("127.0.0.1")],
         addresses=addresses,
         port=7000,
         properties=mdns_props,
-        server=f"{receiver_name}.local.",
+        server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
 
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
@@ -1499,10 +1500,13 @@ if __name__ == "__main__":
     IPV6 = None
     if ifen.get(ni.AF_LINK):
         DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
+        DEVICE_ID_BIN = int((DEVICE_ID).replace(":", ""), base=16).to_bytes(6, 'big')
     if ifen.get(ni.AF_INET):
         IPV4 = ifen[ni.AF_INET][0]["addr"]
+        IP4ADDR_BIN = socket.inet_pton(ni.AF_INET, IPV4)
     if ifen.get(ni.AF_INET6):
         IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
+        IP6ADDR_BIN = socket.inet_pton(ni.AF_INET6, IPV6)
 
     setup_global_structs(args, isDebug=DEBUG)
 
@@ -1518,17 +1522,20 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    mdns = register_mdns(args.mdns)
+    mdns = register_mdns(DEVICE_ID, args.mdns, [IP4ADDR_BIN, IP6ADDR_BIN])
+
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
         PORT = 7000
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 SCR_LOG.info(f"serving at port {PORT}")
+                IPADDR_BIN = IP6ADDR_BIN
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
                 SCR_LOG.info(F"serving at port {PORT}")
+                IPADDR_BIN = IP4ADDR_BIN
                 httpd.serve_forever()
 
     except KeyboardInterrupt:
