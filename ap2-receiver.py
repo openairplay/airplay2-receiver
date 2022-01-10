@@ -22,7 +22,7 @@ from biplist import readPlistFromString, writePlistToString
 from ap2.playfair import PlayFair, FairPlayAES
 from ap2.airplay1 import AP1Security
 from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
-from ap2.pairing.hap import Hap, HAPSocket
+from ap2.pairing.hap import Hap, HAPSocket, LTPK
 from ap2.connections.event import EventGeneric
 from ap2.connections.audio import AudioSetup
 from ap2.connections.stream import Stream
@@ -37,22 +37,6 @@ STATUS_FLAGS = StatusFlags.GetDefaultStatusFlags(StatusFlags)
 # PI = Public ID (can be GUID, MAC, some string)
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
 DEBUG = False
-
-
-class LTPK():
-    # Long Term Public Key - get it from the hap module.
-    def __init__(self, isDebug=False):
-        announce_id, self.ltpk = Hap(PI, isDebug).configure()
-        self.public_int = int.from_bytes(self.ltpk, byteorder='big')
-        # builds a 64 char hex string, for the 32 byte pub key
-        self.public_string = str.lower("{0:0>4X}".format(self.public_int))
-
-    def get_pub_string(self):
-        return self.public_string
-
-    def get_pub_bytes(self):
-        return self.ltpk
-
 
 DEVICE_ID = None
 IPV4 = None
@@ -104,7 +88,7 @@ def setup_global_structs(args, isDebug=False):
     global second_stage_info
     global mdns_props
     global LTPK
-    LTPK = LTPK(isDebug)
+    LTPK = LTPK(PI, isDebug)
 
     device_info = {
         # 'OSInfo': 'Linux 3.10.53',

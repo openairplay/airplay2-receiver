@@ -280,6 +280,21 @@ class LTSK(CRUD_Store):
         self.set_permissions(_id, HomeKitPermissions.Admin)
 
 
+class LTPK():
+    # Long Term Public Key - get it from the hap module.
+    def __init__(self, _id, isDebug=False):
+        announce_id, self.ltpk = Hap(_id, isDebug).configure()
+        self.public_int = int.from_bytes(self.ltpk, byteorder='big')
+        # builds a 64 char hex string, for the 32 byte pub key
+        self.public_string = str.lower("{0:0>4X}".format(self.public_int))
+
+    def get_pub_string(self):
+        return self.public_string
+
+    def get_pub_bytes(self):
+        return self.ltpk
+
+
 # noinspection PyMethodMayBeStatic
 class Hap:
     def __init__(self, identifier, isDebug=False):
