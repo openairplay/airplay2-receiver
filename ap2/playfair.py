@@ -45,7 +45,7 @@ class FairPlayAES():
             airportkey = RSA.importKey(AIRPORT_PRIVATE_KEY)
             cipher = PKCS1_OAEP.new(airportkey)
 
-            binkey = self.decodeb64(rsaaeskeyb64)
+            binkey = decodeb64(rsaaeskeyb64)
             """
             Decoded RSA keys are 256 bytes
             """
@@ -57,7 +57,7 @@ class FairPlayAES():
                 self.logger.info('Got RSA AES key (base64)')
         elif fpaeskeyb64:
             self.logger.info('Got FP AES key (base64)')
-            self.aeskey = self.decodeb64(fpaeskeyb64)
+            self.aeskey = decodeb64(fpaeskeyb64)
             """
             Decoded AES keys are 72 bytes long starting:
             'FPLY...'
@@ -72,14 +72,24 @@ class FairPlayAES():
 
         # Handle AES IV
         if aesivb64:
-            self.aesiv = self.decodeb64(aesivb64)
+            self.aesiv = decodeb64(aesivb64)
             self.logger.info('Got AES IV (base64)')
         elif aesiv:
             self.aesiv = aesiv
             self.logger.info('Got AES IV')
 
-    def decodeb64(self, _input):
-        return base64.standard_b64decode(_input + '==')
+
+def decodeb64(_input):
+    return base64.standard_b64decode(_input + '==')
+
+
+def encodeb64(_input):
+    b64 = base64.standard_b64encode(_input)
+    if b64[-2:] == b"==":
+        b64 = b64[:-2]
+
+    return b64
+
 
 # ===========
 
