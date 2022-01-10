@@ -107,27 +107,27 @@ class Feat(IntFlag):
     # Ft25 seems to require ANNOUNCE
     Ft25iTunes4WEncrypt  = 0x0000000002000000  # 1<<25
     # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
-    Ft26AudioMfi         = 0x0000000004000000  # 1<<26
+    Ft26Audio_AES_Mfi    = 0x0000000004000000  # 1<<26
     # 27: connects and works OK
     Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
     Ft28_Unknown         = 0x0000000010000000  # 1<<28
     Ft29plistMetaData    = 0x0000000020000000  # 1<<29
     Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
-    # Reserved?           =  # 1<<31
-    # 32: iOS music does not see AP with this flag, but macOS sees video - car HUD?
+    # Bit 31 Reserved     =  # 1<<31
     Ft32CarPlay          = 0x0000000100000000  # 1<<32
     Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
     Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
     Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
-    # Ft36Unknown          = 0x0000001000000000  # 1<<36
+    Ft36_Unknown         = 0x0000001000000000  # 1<<36
     Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
     # 38 seems to be implicit with other flags; works with or without 38.
     Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
+    Ft39_Unknown         = 0x0000008000000000  # 1<<39
     # 40 absence: requires ANNOUNCE method
     Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
     Ft41_PTPClock        = 0x0000020000000000  # 1<<41
     Ft42ScreenMultiCodec = 0x0000040000000000  # 1<<42
-    # 43: sends system sounds thru also(?) - setup fails with iOS/macOS
+    # 43
     Ft43SystemPairing    = 0x0000080000000000  # 1<<43
     Ft44APValeriaScrSend = 0x0000100000000000  # 1<<44
     # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
@@ -140,13 +140,16 @@ class Feat(IntFlag):
     Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
     Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
     Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
+    Ft53_Unknown         = 0x0020000000000000  # 1<<53
     Ft54SupportsAPSync   = 0x0040000000000000  # 1<<54
     Ft55SupportsWoL      = 0x0080000000000000  # 1<<55
     Ft56SupportsWoL      = 0x0100000000000000  # 1<<56
+    Ft57_Unknown         = 0x0200000000000000  # 1<<57
     Ft58HangdogRemote    = 0x0400000000000000  # 1<<58
     Ft59AudStreamConnStp = 0x0800000000000000  # 1<<59
     Ft60AudMediaDataCtrl = 0x1000000000000000  # 1<<60
     Ft61RFC2198Redundant = 0x2000000000000000  # 1<<61
+    Ft62_Unknown         = 0x4000000000000000  # 1<<62
     """
     Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
      iOS just fails at Pair-Setup [2/5]
@@ -321,34 +324,74 @@ def setup_global_structs(args, isDebug=False):
     }
 
     mdns_props = {
-        "srcvers": SERVER_VERSION,
-        "deviceid": DEVICE_ID,  # typically MAC addr
+        # Airplay flags
+        # Access ControL. 0,1,2 == anon,users,admin(?)
+        "acl": "0",
+        "deviceid": DEVICE_ID,  # device MAC addr
+        # Features, aka ft - see Feat class.
         "features": f"{hex(FEATURES & 0xffffffff)},{hex(FEATURES >> 32 & 0xffffffff)}",
         "flags": "0x4",
-        # "name": "GINO", # random
-        "model": "Airplay2-Receiver",  # random
-        # "manufacturer": "Pino", # random
-        # "serialNumber": "01234xX321", # random
+        # flags (bitmask)
+        # Group Contains Group Leader.
+        "gcgl": "0",
+        # Group UUID (generated casually)
+        "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",
+        # isGroupLeader: See gcgl
+        # "isGroupLeader": "0",
+        # "manufacturer": "Pino",
+        "model": "Airplay2-Receiver",
+        # "name": "GINO",
         "protovers": "1.1",
-        "acl": "0",  # Access ControL. 0,1,2 == anon,users,admin(?)
+        # Required Sender Features (bitmask)
+        "rsf": "0x0",
+        # "serialNumber": "01234xX321",
+        # Source Version (airplay SDK?): absence triggers AP1 ANNOUNCE behaviour.
+        "srcvers": SERVER_VERSION,
+
+        # RAOP Flags - (XX)
         # These are found under the <deviceid>@<name> mDNS record.
-        # "am": "One",  # Model
-        # "cn": "0",  # CompressioN. 0,1,2,3 == (None aka) PCM, ALAC, AAC, AAC_ELD
-        # "da": "true",  # Digest Auth(?) support
-        # "et": "3",  # Encryption Types. 0,1,3,4,5 == None, RSA, FairPlay, Mfi, FairPlay SAPv2.5
-        # "et": "0,1,3,4,5",  # Audio Encryption Types(?).
-        # "md": "0,1,2",  # MetaData(?) 0,1,2 == Text, Gfx, Progress
-        # "sf": "0x804",  # Status Flags?
-        # "tp": "UDP",  # TransPort for media? csv of transports?
-        # "vs": "366",  # Source version?
-        "rsf": "0x0",  # bitmask: required sender features(?)
-        "fv": "p20.78000.12",  # Firmware version. p20 == AirPlay Src revision?
-        "pi": PI,   # Pairing UUID (generated casually)
-        "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",  # Group UUID (generated casually)
-        "gcgl": "0",  # Group Contains Group Leader.
-        # "isGroupLeader": "0",  # See gcgl
-        # "vn": "65537",  # (Airplay) version number (supported) 16.16, 65537 == 1.1
-        "pk": LTPK.get_pub_string()  # Ed25519 PubKey
+        # Apple Model (name)
+        # "am": "One",
+        # (amount of audio) CHannels
+        "ch": "2",
+        # CompressioN. 0,1,2,3 == (None aka) PCM, ALAC, AAC, AAC_ELD
+        "cn": "0,1,2",
+        # Digest Auth RFC-2617 support
+        # "da": "true",
+        # Encryption Key
+        # "ek": "1",
+        # Encryption Types. 0,1,3,4,5 == None, RSA, FairPlay, Mfi, FairPlay SAPv2.5
+        # "et": "3",
+        # "et": "0,1",
+        # "et": "0,1,3,4,5",
+        # Firmware version. p20 == AirPlay Src revision?
+        # "fv": "p20.78000.12",
+        # MetaData(?) 0,1,2 == Text, Gfx, Progress (only needed for pre iOS7 senders)
+        # "md": "0,1,2",
+        # Pairing UUID (generated casually)
+        "pi": PI,
+        # Ed25519 PubKey
+        "pk": LTPK.get_pub_string(),
+        # "protovers": "1.1",
+        # PassWord enabled: 0/false off, 1/true on.
+        # -This requires Method POST Path /pair-pin-start endpoint
+        # "pw": "false",
+        # Status Flags (bitmask): see StatusFlags class.
+        # "sf": "0x4",
+        # Software Mute (whether needed)
+        # "sm": "false",
+        # Sample Rate
+        # "sr": "44100",
+        # Sample Size
+        # "ss": "16",
+        # Software Volume (whether needed)
+        # "sv": "false",
+        # TransPort for media. CSV of capables transports for audio
+        # "tp": "TCP,UDP",
+        # (Airplay) version number (supported) 16bit.16bit, 65537 == 1.1
+        # "vn": "65537",
+        # Source version
+        # "vs": "366",
     }
 
 
