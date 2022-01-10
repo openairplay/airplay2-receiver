@@ -45,7 +45,14 @@ DEVICE_ID = None
 IPV4 = None
 IPV6 = None
 # Globally assign the device name provided from the command line
-APNAME = None
+DEV_NAME = None
+# Object to hold our mDNS broadcaster
+MDNS_OBJ = None
+# HomeKit AccessControl level to persist settings we get from HomeKit
+#  0=Everyone, 1=(HomeKit Users), 2=Admin
+HK_ACL_LEVEL = 0
+# HomeKit assigned password (numeric PIN) to access
+HK_PW = None
 
 # SERVER_VERSION; presence/absence, and possibly value dictates some client behaviour
 SERVER_VERSION = "366.0"
@@ -63,6 +70,7 @@ Values 0,2,3,4,6 seen.
  3 = SystemPairing (with Ft43SystemPairing)
  4 = Transient
  6 = HomeKit
+ 7 = HomeKit (administration)
 """
 HTTP_X_A_HKP = "X-Apple-HKP"
 HTTP_X_A_CN = "X-Apple-Client-Name"
@@ -125,7 +133,7 @@ def setup_global_structs(args, isDebug=False):
         'keepAliveSendStatsAsBody': True,
         'manufacturer': 'OpenAirplay',
         'model': 'Receiver',
-        'name': APNAME,
+        'name': DEV_NAME,
         'nameIsFactoryDefault': False,
         'pi': PI.decode(),  # UUID generated casually..
         'protocolVersion': '1.1',
@@ -175,7 +183,7 @@ def setup_global_structs(args, isDebug=False):
     mdns_props = {
         # Airplay flags
         # Access ControL. 0,1,2 == anon,users,admin(?)
-        "acl": "0",
+        "acl": HK_ACL_LEVEL,
         "deviceid": DEVICE_ID,  # device MAC addr
         # Features, aka ft - see Feat class.
         "features": get_hex_bitmask(FEATURES),
@@ -189,7 +197,7 @@ def setup_global_structs(args, isDebug=False):
         # "isGroupLeader": "0",
         # "manufacturer": "Pino",
         "model": "Airplay2-Receiver",
-        "name": APNAME,
+        "name": DEV_NAME,
         "protovers": "1.1",
         # Required Sender Features (bitmask)
         "rsf": "0x0",
@@ -226,7 +234,7 @@ def setup_global_structs(args, isDebug=False):
         # -This requires Method POST Path /pair-pin-start endpoint
         # "pw": "false",
         # Status Flags (bitmask): see StatusFlags class.
-        # "sf": get_hex_bitmask(STATUS_FLAGS),
+        "sf": get_hex_bitmask(STATUS_FLAGS),
         # Software Mute (whether needed)
         # "sm": "false",
         # Sample Rate
@@ -1012,12 +1020,16 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(res)
 
     def handle_configure(self):
+        global DEV_NAME
+        global STATUS_FLAGS
+        global HK_ACL_LEVEL
+        global HK_PW
         acl_s = 'Access_Control_Level'
         acl = 0
         cd_s = 'ConfigurationDictionary'
-        dn = APNAME
+        dn = DEV_NAME
         dn_s = 'Device_Name'
-        hkac = False
+        hkac = True
         hkac_s = 'Enable_HK_Access_Control'
         pw = ''
         pw_s = 'Password'
@@ -1033,23 +1045,49 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 # 1 == Home members
                 # 2 == Admin members
                 acl = int(plist[cd_s][acl_s])
+                # Reassign any changes from HomeKit
+                HK_ACL_LEVEL = acl
             if dn_s in plist[cd_s]:
-                dn = plist[cd_s][dn_s]
+                # reassign global device name that we get from HomeKit
+                DEV_NAME = dn = plist[cd_s][dn_s]
             if hkac_s in plist[cd_s]:
                 hkac = bool(plist[cd_s][hkac_s])
             if pw_s in plist[cd_s]:
                 pw = plist[cd_s][pw_s]
+                # reassign global password from HomeKit
+                HK_PW = pw
+
+        # Get the flags HK changes.
+        hkac_enabled_flag = STATUS_FLAGS & StatusFlags.getHKACFlag(StatusFlags)
+        pw_set_flag = STATUS_FLAGS & StatusFlags.getPWSetFlag(StatusFlags)
+
+        # Update device status flags broadcast via mDNS. First AccCtrl
+        if hkac and not hkac_enabled_flag:
+            STATUS_FLAGS ^= StatusFlags.getHKACFlag(StatusFlags)
+        if not hkac and hkac_enabled_flag:
+            STATUS_FLAGS ^= StatusFlags.getHKACFlag(StatusFlags)
+        # Then password (HK without homepod seems to update this erratically)
+        if pw and not pw_set_flag:
+            STATUS_FLAGS ^= StatusFlags.getPWSetFlag(StatusFlags)
+        if not pw and pw_set_flag:
+            STATUS_FLAGS ^= StatusFlags.getPWSetFlag(StatusFlags)
+            HK_PW = None
+
+        # Update mDNS with the HK modified info.
+        setup_global_structs(args, isDebug=DEBUG)
+        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+        # TODO: persist the changes
 
         accessory_id, accessory_ltpk = self.server.hap.configure()
         configure_info = {
             'Identifier': accessory_id.decode('utf-8'),
-            'Enable_HK_Access_Control': hkac,
+            hkac_s: hkac,
             'PublicKey': accessory_ltpk,
-            'Device_Name': dn,
-            'Access_Control_Level': acl
+            dn_s: dn,
+            acl_s: acl or HK_ACL_LEVEL
         }
-        if pw != '':
-            configure_info['Password'] = pw
+        if pw:
+            configure_info['Password'] = pw or HK_PW
 
         res = writePlistToString(configure_info)
         SCR_LOG.info(self.pp.pformat(configure_info))
@@ -1270,7 +1308,7 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
-    APNAME = args.mdns
+    DEV_NAME = args.mdns
 
     if args.features:
         # Old way. Leave for those who use this way.
@@ -1340,7 +1378,7 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    mdns = register_mdns(DEVICE_ID, APNAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
@@ -1363,4 +1401,4 @@ if __name__ == "__main__":
         pass
     finally:
         SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*mdns)
+        unregister_mdns(*MDNS_OBJ)

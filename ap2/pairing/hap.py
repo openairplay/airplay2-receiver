@@ -316,7 +316,7 @@ class Hap:
 
         """
         TODO: controller_id is (meant to be) evident from the HAP connection,
-        but ap2-receciver handles only 1 simultaneous connection, whereas the
+        but ap2-receiver handles only 1 simultaneous connection, whereas the
         HAP spec mandates eight (8).
         """
         self.controller_id = None

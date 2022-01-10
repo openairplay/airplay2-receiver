@@ -209,3 +209,14 @@ class StatusFlags(IntFlag):
             # we must handle stream type 130 for RCR
             # | self.RemoteControlRelay
         )
+
+    def getHKACFlag(self):
+        return (
+            self.Enable_HK_Access_Control
+        )
+
+    def getPWSetFlag(self):
+        return (
+            self.PasswordNeeded
+            | self.PairingPIN_aka_OTP
+        )
