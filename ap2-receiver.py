@@ -34,14 +34,18 @@ from ap2.bitflags import FeatureFlags, StatusFlags
 FEATURES = FeatureFlags.GetDefaultAirplayTwoFlags(FeatureFlags)
 STATUS_FLAGS = StatusFlags.GetDefaultStatusFlags(StatusFlags)
 
-# PI = Public ID (can be GUID, MAC, some string)
+# PI = Public ID (can be GUID, MAC, some string).
+#  Note: BINARY. HAP classes expect binary format. Must be in text in device_info.
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
 DEBUG = False
 
+# The device MAC - string form.
 DEVICE_ID = None
+# The chosen interface's IPv4/6
 IPV4 = None
 IPV6 = None
 
+# SERVER_VERSION; presence/absence, and possibly value dictates some client behaviour
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
 HTTP_CT_OCTET = "application/octet-stream"
@@ -61,8 +65,10 @@ Values 0,2,3,4,6 seen.
 HTTP_X_A_HKP = "X-Apple-HKP"
 HTTP_X_A_CN = "X-Apple-Client-Name"
 HTTP_X_A_PD = "X-Apple-PD"
-HTTP_X_A_AT = "X-Apple-AbsoluteTime"  # Unix timestamp for current system date/time.
-HTTP_X_A_ET = "X-Apple-ET"  # Encryption Type
+# HTTP_X_A_AT: Unix timestamp for current system date/time.
+HTTP_X_A_AT = "X-Apple-AbsoluteTime"
+# Encryption Type
+HTTP_X_A_ET = "X-Apple-ET"
 
 #
 AIRPLAY_BUFFER = 8388608  # 0x800000 i.e. 1024 * 8192 - how many CODEC frame size 1024 we can hold
@@ -130,10 +136,10 @@ def setup_global_structs(args, isDebug=False):
         'model': 'Receiver',
         'name': args.mdns,
         'nameIsFactoryDefault': False,
-        'pi': 'ba5cb8df-7f14-4249-901a-5e748ce57a93',  # UUID generated casually..
+        'pi': PI.decode(),  # UUID generated casually..
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
-        'sourceVersion': '366.0',
+        'sourceVersion': SERVER_VERSION,
         'statusFlags': get_hex_bitmask(STATUS_FLAGS),
         # 'statusFlags': 0x404 # Sonos One
     }
@@ -221,7 +227,7 @@ def setup_global_structs(args, isDebug=False):
         # MetaData(?) 0,1,2 == Text, Gfx, Progress (only needed for pre iOS7 senders)
         # "md": "0,1,2",
         # Pairing UUID (generated casually)
-        "pi": PI,
+        "pi": PI.decode(),
         # Ed25519 PubKey
         "pk": LTPK.get_pub_string(),
         # "protovers": "1.1",
