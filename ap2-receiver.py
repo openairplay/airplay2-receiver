@@ -101,26 +101,15 @@ def setup_global_structs(args, isDebug=False):
         # 'PTPInfo': 'OpenAVNU ArtAndLogic-aPTP-changes a5d7f94-0.0.1',
         'audioLatencies': [
             {
+                # audioType can be: e.g. NULL/nothing (iTunes), default, media, telephony, speechRecognition, alert
+                #  (AP1?) GeneralAudio(96), MainAudio(100), AltAudio(101), Screen(110).
+                #  Absence triggers default.
+                # 'audioType': 'default',
                 'inputLatencyMicros': 0,
                 'outputLatencyMicros': 400000,
-                'type': 100
+                # Type can be any RTP type, 96, 100, 103, 110 etc.
+                # 'type': 96
             },
-            {
-                'audioType': 'default',
-                'inputLatencyMicros': 0,
-                'outputLatencyMicros': 400000,
-                'type': 100},
-            {
-                'audioType': 'media',
-                'inputLatencyMicros': 0,
-                'outputLatencyMicros': 400000,
-                'type': 100},
-            {
-                'audioType': 'media',
-                'inputLatencyMicros': 0,
-                'outputLatencyMicros': 400000,
-                'type': 102
-            }
         ],
         # 'build': '16.0',
         'deviceID': DEVICE_ID,
