@@ -16,13 +16,13 @@ import socketserver
 import netifaces as ni
 from hexdump import hexdump
 from Crypto.Cipher import ChaCha20_Poly1305, AES
-from zeroconf import IPVersion, ServiceInfo, Zeroconf
+from zeroconf import IPVersion, ServiceInfo, Zeroconf, NonUniqueNameException
 from biplist import readPlistFromString, writePlistToString
 
 from ap2.playfair import PlayFair, FairPlayAES
 from ap2.airplay1 import AP1Security
 from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
-from ap2.pairing.hap import Hap, HAPSocket, LTPK
+from ap2.pairing.hap import Hap, HAPSocket, LTPK, DeviceProperties
 from ap2.connections.event import EventGeneric
 from ap2.connections.audio import AudioSetup
 from ap2.connections.stream import Stream
@@ -41,6 +41,8 @@ DEBUG = False
 
 # The device MAC - string form.
 DEVICE_ID = None
+# HAP object to hold device properties like name, ACL, password etc.
+DEV_PROPS = None
 # The chosen interface's IPv4/6
 IPV4 = None
 IPV6 = None
@@ -97,6 +99,26 @@ def get_hex_bitmask(in_features):
         return f"{hex(in_features & 0xffffffff)},{hex(in_features >> 32 & 0xffffffff)}"
 
 
+def update_status_flags(flag=None, on=False, push=True):
+    """ Use this to check for and send out updated status flags
+    if flag is None, skip changing the flags (e.g. updates already queued)
+    if on is true, add the flag in, otherwise remove it.
+    if push is False, skip the update (e.g. you want to queue multiple changes)
+    """
+    if flag:
+        global STATUS_FLAGS
+        # If the flag is not present in STATUS_FLAGS, add it in, if on is True
+        if not STATUS_FLAGS & flag and on:
+            STATUS_FLAGS ^= flag
+        elif STATUS_FLAGS & flag and not on:
+            STATUS_FLAGS ^= flag
+        # push out mDNS update
+        setup_global_structs(args, isDebug=DEBUG)
+    # If push is false, we skip the update.
+    if push:
+        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+
+
 def setup_global_structs(args, isDebug=False):
     global device_info
     global device_setup
@@ -104,6 +126,7 @@ def setup_global_structs(args, isDebug=False):
     global second_stage_info
     global mdns_props
     global LTPK_OBJ
+    global DEV_NAME
     LTPK_OBJ = LTPK(PI, isDebug)
 
     device_info = {
@@ -1021,12 +1044,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
     def handle_configure(self):
         global DEV_NAME
+        global DEV_PROPS
         global STATUS_FLAGS
         global HK_ACL_LEVEL
         global HK_PW
+        pwset = True
+        cd_s = 'ConfigurationDictionary'
         acl_s = 'Access_Control_Level'
         acl = 0
-        cd_s = 'ConfigurationDictionary'
         dn = DEV_NAME
         dn_s = 'Device_Name'
         hkac = True
@@ -1047,36 +1072,34 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 acl = int(plist[cd_s][acl_s])
                 # Reassign any changes from HomeKit
                 HK_ACL_LEVEL = acl
+                DEV_PROPS.setDeviceACL(acl)
             if dn_s in plist[cd_s]:
                 # reassign global device name that we get from HomeKit
                 DEV_NAME = dn = plist[cd_s][dn_s]
+                DEV_PROPS.setDeviceName(dn)
             if hkac_s in plist[cd_s]:
                 hkac = bool(plist[cd_s][hkac_s])
+                DEV_PROPS.setHKACL(hkac)
+                if hkac:
+                    update_status_flags(StatusFlags.getHKACFlag(StatusFlags), on=True)
+                else:
+                    update_status_flags(StatusFlags.getHKACFlag(StatusFlags))
             if pw_s in plist[cd_s]:
+                """
+                There seems to be a logic bug in iOS >= 14.8.1 whereby pw updates
+                are slow or don't happen if you change pw settings too rapidly in
+                homekit->allow speaker&tv access.
+                """
                 pw = plist[cd_s][pw_s]
+                pwset = False if pw == '' else True
+                if pwset:
+                    update_status_flags(StatusFlags.getPWSetFlag(StatusFlags), on=True)
+                else:
+                    update_status_flags(StatusFlags.getPWSetFlag(StatusFlags))
+
                 # reassign global password from HomeKit
                 HK_PW = pw
-
-        # Get the flags HK changes.
-        hkac_enabled_flag = STATUS_FLAGS & StatusFlags.getHKACFlag(StatusFlags)
-        pw_set_flag = STATUS_FLAGS & StatusFlags.getPWSetFlag(StatusFlags)
-
-        # Update device status flags broadcast via mDNS. First AccCtrl
-        if hkac and not hkac_enabled_flag:
-            STATUS_FLAGS ^= StatusFlags.getHKACFlag(StatusFlags)
-        if not hkac and hkac_enabled_flag:
-            STATUS_FLAGS ^= StatusFlags.getHKACFlag(StatusFlags)
-        # Then password (HK without homepod seems to update this erratically)
-        if pw and not pw_set_flag:
-            STATUS_FLAGS ^= StatusFlags.getPWSetFlag(StatusFlags)
-        if not pw and pw_set_flag:
-            STATUS_FLAGS ^= StatusFlags.getPWSetFlag(StatusFlags)
-            HK_PW = None
-
-        # Update mDNS with the HK modified info.
-        setup_global_structs(args, isDebug=DEBUG)
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
-        # TODO: persist the changes
+                DEV_PROPS.setDevicePassword(pw)
 
         accessory_id, accessory_ltpk = self.server.hap.configure()
         configure_info = {
@@ -1181,15 +1204,38 @@ def register_mdns(mac, receiver_name, addresses):
     )
 
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
-    zeroconf.register_service(info)
-    SCR_LOG.info("mDNS service registered")
+
+    # Remove stale entries
+    if MDNS_OBJ:
+        unregister_mdns(MDNS_OBJ[0], MDNS_OBJ[1], remove=False)
+    # Push out new entries
+    try:
+        zeroconf.register_service(info)
+        SCR_LOG.info("mDNS: service registered")
+    except (NonUniqueNameException) as e:
+        SCR_LOG.error(f'mDNS exception during registration: {repr(e)}')
+    finally:
+        pass
     return (zeroconf, info)
 
 
-def unregister_mdns(zeroconf, info):
-    SCR_LOG.info("Unregistering...")
-    zeroconf.unregister_service(info)
-    zeroconf.close()
+def unregister_mdns(zeroconf, info, remove=True):
+    """
+    If remove is true, close and remove the zeroconf instance also
+    Otherwise attempt to remove old entries
+    """
+    try:
+        zeroconf.unregister_service(info)
+        if remove:
+            SCR_LOG.info("mDNS: Unregistering")
+        else:
+            SCR_LOG.info("mDNS: Old entries removed")
+    except (NonUniqueNameException) as e:
+        # Observed NonUniqueNameException once during testing
+        SCR_LOG.error(f'mDNS exception during removal: {repr(e)}')
+    finally:
+        if remove:
+            zeroconf.close()
 
 
 def get_free_port():
@@ -1308,7 +1354,19 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
+    DEV_PROPS = DeviceProperties(PI, DEBUG)
     DEV_NAME = args.mdns
+    if(parser.get_default('mdns') != DEV_NAME):
+        DEV_PROPS.setDeviceName(DEV_NAME)
+    else:
+        DEV_NAME = DEV_PROPS.getDeviceName()
+    SCR_LOG.info(f"Name: {DEV_NAME}")
+    pw = DEV_PROPS.getDevicePassword()
+    hkacl = DEV_PROPS.isHKACLEnabled()
+    if pw:
+        STATUS_FLAGS ^= StatusFlags.getPWSetFlag(StatusFlags)
+    if hkacl:
+        STATUS_FLAGS ^= StatusFlags.getHKACFlag(StatusFlags)
 
     if args.features:
         # Old way. Leave for those who use this way.

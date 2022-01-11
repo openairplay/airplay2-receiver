@@ -2,8 +2,10 @@
 
 Very quick python implementation of AP2 protocol using **minimal
 multi-room** features. For now it implements:
-- HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305)
+- HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305) - bit flag 48
 - HomeKit non-transient pairing
+- Some refinements for HomeKit interaction (e.g. managed/active flags)
+- Persist device name and some HomeKit properties across restarts (just use the -m flag again to set the device name anew)
 - FairPlay (v3) authentication
 - Receiving of both REALTIME and BUFFERED Airplay2 audio streams
 - Airplay2 Service publication

@@ -186,7 +186,7 @@ class StatusFlags(IntFlag):
     # Need password to use
     PasswordNeeded                 = 0x000080  # 1<< 7
     StatusUnknown_08               = 0x000100  # 1<< 8
-    # need PIN to pair
+    # need PIN to pair - client will request PIN based auth
     PairingPIN_aka_OTP             = 0x000200  # 1<< 9
     # Note: prevents adding to HomeKit when set.
     Enable_HK_Access_Control       = 0x000400  # 1<<10

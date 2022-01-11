@@ -25,6 +25,7 @@ from enum import IntFlag
 PAIRING_STORE = "./pairings/"
 PAIRING_FILE = "pairings.txt"
 LTSK_FILE = "ltsk.txt"
+DEV_PROPS = "device_properties.txt"
 ACCESSORY_SECRET = "accessory-secret"
 
 
@@ -186,27 +187,56 @@ class CRUD_Store:
         self.json_handler.put_store(self.store)
 
     def read_entry(self, _id: bytes, _which: str):
-        return self.store[_id.decode()][_which] + '=='
+        return self.store[_id.decode()][_which]
 
-    def delete_entry(self, _id: bytes):
-        _val = self.store.pop(_id.decode())
-        self.json_handler.put_store(self.store)
-        return _val
+    def delete_entry(self, _id: bytes, _which=None):
+        if not _which:
+            _val = self.store.pop(_id.decode())
+            self.json_handler.put_store(self.store)
+            return _val
+        else:
+            ret = self.store[_id.decode()].pop(
+                f'{_which}'
+            )
+            self.json_handler.put_store(self.store)
+            return ret
 
     # Higher logic
     def set_bytes(self, _id: bytes, _which: str, _val: bytes):
-        self.create_entry(
-            _id,
-            _which,
-            base64.standard_b64encode(
-                _val
-            ).decode()
-        )
+        if _val is not None:
+            self.create_entry(
+                _id,
+                _which,
+                base64.standard_b64encode(
+                    _val
+                ).decode()
+            )
+        else:
+            self.delete_entry(
+                _id,
+                _which,
+            )
 
     def get_bytes(self, _id: bytes, _which: str):
         return base64.standard_b64decode(
             self.read_entry(_id, _which)
         )
+
+    def set_string(self, _id: bytes, _which: str, _val: str):
+        if _val is None or _val == '':
+            self.delete_entry(
+                _id,
+                _which,
+            )
+        else:
+            self.create_entry(
+                _id,
+                _which,
+                _val
+            )
+
+    def get_string(self, _id: bytes, _which: str):
+        return self.read_entry(_id, _which)
 
     def get_ltpk(self, _id: bytes):
         return self.get_bytes(_id, 'LTPK')
@@ -296,6 +326,71 @@ class LTPK():
 
     def get_pub_bytes(self):
         return self.ltpk
+
+
+class DeviceProperties(CRUD_Store):
+    """
+    This object persists ap2-receiver device properties (the mDNS property)
+    as set by HomeKit
+    """
+    def __init__(self, _id, isDebug=False):
+        self.isDebug = isDebug
+        if not isinstance(_id, (bytes, bytearray)):
+            _id = _id.encode('utf8')
+        self._id = _id
+        """
+        Each DeviceProperties {ID} can contain:
+        -Name
+        -Password
+        -ACLPermissions
+        """
+        super(DeviceProperties, self).__init__()
+        self.json_handler = JSON_Store(PAIRING_STORE + DEV_PROPS)
+        self.store = self.json_handler.get_store()
+        self._id = _id
+
+    def getDeviceName(self):
+        try:
+            return self.get_string(self._id, 'deviceName')
+        except KeyError:
+            return None
+
+    def setDeviceName(self, _value=None):
+        name = self.set_string(self._id, 'deviceName', _value)
+        # return _value
+
+    def isHKACLEnabled(self):
+        try:
+            return self.get_string(self._id, 'Enable_HK_Access_Control')
+        except KeyError:
+            return None
+
+    def setHKACL(self, _value=None):
+        hkacl = self.set_string(self._id, 'Enable_HK_Access_Control', _value)
+
+    def getDevicePassword(self):
+        try:
+            return self.get_string(self._id, 'devicePassword')
+        except KeyError:
+            return None
+
+    def setDevicePassword(self, _value=None):
+        try:
+            pw = self.set_string(self._id, 'devicePassword', _value)
+        except KeyError:
+            pass
+
+    def getDeviceACL(self):
+        try:
+            return self.get_permissions(self._id).decode()
+        except KeyError:
+            return None
+
+    def setDeviceACL(self, _value=None):
+        if isinstance(_value, (int)):
+            _value = int.to_bytes(_value, 1, 'big')
+        acl = self.set_permissions(self._id, _value)
+        # return _value
 
 
 # noinspection PyMethodMayBeStatic
