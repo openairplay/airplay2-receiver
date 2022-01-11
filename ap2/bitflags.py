@@ -220,3 +220,8 @@ class StatusFlags(IntFlag):
             self.PasswordNeeded
             | self.PairingPIN_aka_OTP
         )
+
+    def getRecvSessActive(self):
+        return (
+            self.ReceiverSessionIsActive
+        )

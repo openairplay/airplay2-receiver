@@ -644,7 +644,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("CSeq", self.headers["CSeq"])
             self.end_headers()
             SCR_LOG.info('')
-
+            # Send flag that we're active
+            update_status_flags(StatusFlags.getRecvSessActive(StatusFlags), on=True)
             return
 
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
@@ -700,6 +701,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(res)
                     SCR_LOG.info('')
+                    # Send flag that we're active
+                    update_status_flags(StatusFlags.getRecvSessActive(StatusFlags), on=True)
                 return
         self.send_error(404)
         SCR_LOG.info('')
@@ -832,6 +835,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+
+        # Send flag that we're no longer active
+        update_status_flags(StatusFlags.getRecvSessActive(StatusFlags))
 
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
