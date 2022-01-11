@@ -27,186 +27,11 @@ from ap2.connections.audio import AudioSetup
 from ap2.connections.stream import Stream
 from ap2.dxxp import parse_dxxp
 from enum import IntFlag, Enum
+from ap2.bitflags import FeatureFlags, StatusFlags
 
 
-"""
-# No Auth - coreutils, PairSetupMfi
-# MFi Verify fail error after pair-setup[2/5]
-FEATURES = 0x88340405f8a00
-# No Auth - HK and coreutils
-# Stops after pairing (setup [5/5] verify [2/2])with no supported auth error
-FEATURES = 0xc340405f8a00
-# No Auth = HK, coreutils, PairSetupMFi
-# MFi Verify fail error after pair-setup[2/5]
-FEATURES = 0x8c340405f8a00
-# Mfi Auth - HK and coreutils
-# All encrypt after pairing (setup [5/5] verify [2/2])
-FEATURES = 0xc340445f8a00
-# FairPlay - HK and coreutils
-# Stops after pairing (setup [5/5] verify [2/2])with no supported auth error
-FEATURES = 0xc340405fca00
-# FairPlay - HK and coreutils and transient
-# fp-setup after pair-setup[2/5]
-FEATURES = 0x1c340405fca00
-# MFi - HK and coreutils and transient
-# auth-setup after pair-setup[2/5]
-FEATURES = 0x1c340445f8a00
-# No Auth - No enc - PairSetupMFi
-# Works!!
-FEATURES = 0x8030040780a00
-# No Auth - No enc
-# No supported authentication types.
-# FEATURES = 0x30040780a00
-# FEATURES = 0x8030040780a00 | (1 << 27)
-
-FEATURES = 0x1c340405fca00
-"""
-
-
-class Feat(IntFlag):
-    # https://emanuelecozzi.net/docs/airplay2/features/
-    # https://openairplay.github.io/airplay-spec/features.html
-    # https://nto.github.io/AirPlay.html
-    # 07: seems to need NTP
-    Ft00Video            = 0x0000000000000001  # 1<<0
-    Ft01Photo            = 0x0000000000000002  # 1<<1
-    Ft02VideoFairPlay    = 0x0000000000000004  # 1<<2
-    Ft03VideoVolumeCtrl  = 0x0000000000000008  # 1<<3
-    Ft04VideoHTTPLiveStr = 0x0000000000000010  # 1<<4
-    Ft05Slideshow        = 0x0000000000000020  # 1<<5
-    Ft06_Unknown         = 0x0000000000000040  # 1<<6
-    Ft07ScreenMirroring  = 0x0000000000000080  # 1<<7
-    Ft08ScreenRotate     = 0x0000000000000100  # 1<<8
-    # Ft09 is necessary for iPhones/Music: audio
-    Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
-    Ft10Unknown          = 0x0000000000000400  # 1<<10
-    Ft11AudRedundant     = 0x0000000000000800  # 1<<11
-    # Feat12: iTunes4Win ends ANNOUNCE with rsaaeskey, does not attempt FPLY auth.
-    # also coerces frequent OPTIONS packets (keepalive) from iPhones.
-    Ft12FPSAPv2p5_AES_GCM = 0x0000000000001000  # 1<<12
-    # 13-14 MFi stuff.
-    Ft13MFiHardware      = 0x0000000000002000  # 1<<13
-    # Music on iPhones needs this to stream audio
-    Ft14MFiSoft_FairPlay = 0x0000000000004000  # 1<<14
-    # 15-17 not mandatory - faster pairing without
-    Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
-    Ft16AudioMetaProgres = 0x0000000000010000  # 1<<16
-    Ft17AudioMetaTxtDAAP = 0x0000000000020000  # 1<<17
-    # macOS needs 18 to pair
-    Ft18RcvAudPCM        = 0x0000000000040000  # 1<<18
-    # macOS needs 19
-    Ft19RcvAudALAC       = 0x0000000000080000  # 1<<19
-    # iOS needs 20
-    Ft20RcvAudAAC_LC     = 0x0000000000100000  # 1<<20
-    Ft21Unknown          = 0x0000000000200000  # 1<<21
-    # Try Ft22 without Ft40 - ANNOUNCE + SDP
-    Ft22AudioUnencrypted = 0x0000000000400000  # 1<<22
-    Ft23RSA_Auth         = 0x0000000000800000  # 1<<23
-    Ft24Unknown          = 0x0000000001000000  # 1<<24
-    # Pairing stalls with longer /auth-setup string w/26
-    # Ft25 seems to require ANNOUNCE
-    Ft25iTunes4WEncrypt  = 0x0000000002000000  # 1<<25
-    # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
-    Ft26Audio_AES_Mfi    = 0x0000000004000000  # 1<<26
-    # 27: connects and works OK
-    Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
-    Ft28_Unknown         = 0x0000000010000000  # 1<<28
-    Ft29plistMetaData    = 0x0000000020000000  # 1<<29
-    Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
-    # Bit 31 Reserved     =  # 1<<31
-    Ft32CarPlay          = 0x0000000100000000  # 1<<32
-    Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
-    Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
-    Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
-    Ft36_Unknown         = 0x0000001000000000  # 1<<36
-    Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
-    # 38 seems to be implicit with other flags; works with or without 38.
-    Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
-    Ft39_Unknown         = 0x0000008000000000  # 1<<39
-    # 40 absence: requires ANNOUNCE method
-    Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
-    Ft41_PTPClock        = 0x0000020000000000  # 1<<41
-    Ft42ScreenMultiCodec = 0x0000040000000000  # 1<<42
-    # 43
-    Ft43SystemPairing    = 0x0000080000000000  # 1<<43
-    Ft44APValeriaScrSend = 0x0000100000000000  # 1<<44
-    # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
-    # 45 triggers stream type:96 (without ft41, PTP)
-    Ft45_NTPClock        = 0x0000200000000000  # 1<<45
-    Ft46HKPairing        = 0x0000400000000000  # 1<<46
-    Ft47PeerMgmt         = 0x0000800000000000  # 1<<47
-    Ft48TransientPairing = 0x0001000000000000  # 1<<48
-    Ft49AirPlayVideoV2   = 0x0002000000000000  # 1<<49
-    Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
-    Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
-    Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
-    Ft53_Unknown         = 0x0020000000000000  # 1<<53
-    Ft54SupportsAPSync   = 0x0040000000000000  # 1<<54
-    Ft55SupportsWoL      = 0x0080000000000000  # 1<<55
-    Ft56SupportsWoL      = 0x0100000000000000  # 1<<56
-    Ft57_Unknown         = 0x0200000000000000  # 1<<57
-    Ft58HangdogRemote    = 0x0400000000000000  # 1<<58
-    Ft59AudStreamConnStp = 0x0800000000000000  # 1<<59
-    Ft60AudMediaDataCtrl = 0x1000000000000000  # 1<<60
-    Ft61RFC2198Redundant = 0x2000000000000000  # 1<<61
-    Ft62_Unknown         = 0x4000000000000000  # 1<<62
-    """
-    Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
-     iOS just fails at Pair-Setup [2/5]
-    """
-
-
-# # FEATURES = 0x1c340405fca00 equals the below mask
-# FEATURES = (
-#     Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
-#     | Feat.Ft41_PTPClock | Feat.Ft40BufferedAudio | Feat.Ft38CtrlChanEncrypt
-#     | Feat.Ft30UnifiedAdvertInf | Feat.Ft22AudioUnencrypted
-#     | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
-#     | Feat.Ft17AudioMetaTxtDAAP | Feat.Ft16AudioMetaProgres | Feat.Ft15AudioMetaCovers
-#     | Feat.Ft14MFiSoft_FairPlay | Feat.Ft11AudExtra | Feat.Ft09AirPlayAudio
-# )
-
-FEATURES = (
-    Feat.Ft48TransientPairing | Feat.Ft47PeerMgmt | Feat.Ft46HKPairing
-    | Feat.Ft41_PTPClock
-    | Feat.Ft40BufferedAudio
-    | Feat.Ft30UnifiedAdvertInf
-    | Feat.Ft22AudioUnencrypted
-    | Feat.Ft20RcvAudAAC_LC | Feat.Ft19RcvAudALAC | Feat.Ft18RcvAudPCM
-    | Feat.Ft17AudioMetaTxtDAAP
-    | Feat.Ft16AudioMetaProgres
-    # | Feat.Ft15AudioMetaCovers
-    | Feat.Ft14MFiSoft_FairPlay | Feat.Ft09AirPlayAudio
-)
-
-
-class StatusFlags(IntFlag):
-    StatusNone         = 0x00000  # 0
-    ProblemsExist      = 0x00001  # 1<< 0
-    # Probably a WAC (wireless accessory ctrl) thing:
-    Unconfigured       = 0x00002  # 1<< 1
-    # Audio cable attached (legacy): all is well.
-    AudioLink          = 0x00004  # 1<< 2
-    PINmode            = 0x00008  # 1<< 3
-    PINentry           = 0x00010  # 1<< 4
-    PINmatch           = 0x00020  # 1<< 5
-    StatusUnknown6     = 0x00040  # 1<< 6
-    # Need password to use
-    PasswordNeeded     = 0x00080  # 1<< 7
-    StatusUnknown8     = 0x00100  # 1<< 8
-    # need PIN to pair
-    PairingPIN         = 0x00200  # 1<< 9
-    # was set up for HK Access ctrl
-    HKAccessControl    = 0x00400  # 1<<10
-    # RCR opens up interesting behaviours
-    RemoteControlRelay = 0x00800  # 1<<11
-
-
-STATUS_FLAGS = (
-    StatusFlags.AudioLink
-    # we must handle stream type 130 for RCR
-    # | StatusFlags.RemoteControlRelay
-)
+FEATURES = FeatureFlags.GetDefaultAirplayTwoFlags(FeatureFlags)
+STATUS_FLAGS = StatusFlags.GetDefaultStatusFlags(StatusFlags)
 
 # PI = Public ID (can be GUID, MAC, some string)
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
@@ -555,7 +380,7 @@ class SDPHandler():
                 self.aeskey = k.split(':')[1]
             elif 'a=rsaaeskey:' in k:
                 self.has_rsa = True
-                # RSA - Use Feat.Ft12FPSAPv2p5_AES_GCM
+                # RSA - Use FeatureFlags.getFeature12(FeatureFlags)
                 self.aeskey = k.split(':')[1]
             elif 'a=fpaeskey:' in k:
                 self.has_fp = True
@@ -692,17 +517,17 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.server.hap = None
                 else:
                     if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
-                       and int((FEATURES & Feat.Ft19RcvAudALAC)) == 0):
+                       and int((FEATURES & FeatureFlags.getFeature19ALAC(FeatureFlags))) == 0):
                         SCR_LOG.warning("This receiver not configured for ALAC (set flag 19).")
                         self.send_response(404)
                         self.server.hap = None
                     elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
-                          and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
+                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
                         SCR_LOG.warning("This receiver not configured for AAC (set flag 20).")
                         self.send_response(404)
                         self.server.hap = None
                     elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
-                          and int((FEATURES & Feat.Ft20RcvAudAAC_LC)) == 0):
+                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
                         SCR_LOG.warning("This receiver not configured for AAC (set flag 20/21).")
                         self.send_response(404)
                         self.server.hap = None
@@ -1391,7 +1216,7 @@ def list_network_interfaces():
 
 def list_available_flags():
     print(f'[?] Available feature names:')
-    for ft in Feat:
+    for ft in FeatureFlags:
         print(f' {ft.name}')
     print('[?] Choose named features via their numbers. E.g. for Ft07, write: 7')
 
@@ -1459,7 +1284,7 @@ if __name__ == "__main__":
         try:
             FEATURES = int(args.features, 16)
             SCR_LOG.info(f"Features:")
-            SCR_LOG.info(Feat(FEATURES))
+            SCR_LOG.info(FeatureFlags(FEATURES))
         except Exception:
             SCR_LOG.error("[!] Error with feature arg - hex format required")
             exit(-1)
@@ -1478,17 +1303,17 @@ if __name__ == "__main__":
                         raise Exception
                     flags |= (1 << int(ft))
                 if args.ft:
-                    FEATURES = Feat(flags)
+                    FEATURES = FeatureFlags(flags)
                 elif args.ftnot:
-                    FEATURES = Feat(~flags)
+                    FEATURES = FeatureFlags(~flags)
                 elif args.ftand:
-                    FEATURES &= Feat(flags)
+                    FEATURES &= FeatureFlags(flags)
                 elif args.ftor:
-                    FEATURES |= Feat(flags)
+                    FEATURES |= FeatureFlags(flags)
                 elif args.ftxor:
-                    FEATURES ^= Feat(flags)
+                    FEATURES ^= FeatureFlags(flags)
                 SCR_LOG.info(f'Chosen features: {flags:016x}')
-                SCR_LOG.info(Feat(flags))
+                SCR_LOG.info(FeatureFlags(flags))
             except Exception:
                 SCR_LOG.info("[!] Incorrect flags/mask.")
                 SCR_LOG.info(f"[!] Proceeding with defaults.")
