@@ -275,7 +275,14 @@ class Audio:
 
         self.audio_screen_logger.debug(f"Negotiated audio format: {AirplayAudFmt(audio_format)}")
 
-    def __init__(self, session_key, audio_format, buff_size, session_iv=None, isDebug=False, aud_params: AudioSetup = None):
+    def __init__(
+            self,
+            session_key, session_iv=None,
+            audio_format=None, buff_size=None,
+            streamtype=0,
+            isDebug=False,
+            aud_params: AudioSetup = None,
+    ):
         self.isDebug = isDebug
         if self.isDebug:
             self.audio_file_logger = get_file_logger("Audio.debug", level="DEBUG")
@@ -391,7 +398,7 @@ class Audio:
                 pass
         return data
 
-    def handle(self, rtp):
+    def log(self, rtp):
         if self.isDebug:
             msg = f"v={rtp.version} p={rtp.padding} x={rtp.extension}"
             msg += f" cc={rtp.csrc_count} m={rtp.marker} pt={rtp.payload_type}"
@@ -420,8 +427,21 @@ class Audio:
         player_thread.start()
 
     @classmethod
-    def spawn(cls, session_key, audio_format, buff, iv=None, isDebug=False, aud_params: AudioSetup = None):
-        audio = cls(session_key, audio_format, buff, iv, isDebug, aud_params)
+    def spawn(
+            cls,
+            session_key, iv=None,
+            audio_format=0, buff_size=None,
+            streamtype=0,
+            isDebug=False,
+            aud_params: AudioSetup = None,
+    ):
+        audio = cls(
+            session_key, iv,
+            audio_format, buff_size,
+            streamtype,
+            isDebug,
+            aud_params,
+        )
         # This pipe is reachable from receiver
         parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
         mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
@@ -431,9 +451,25 @@ class Audio:
 
 
 class AudioRealtime(Audio):
-
-    def __init__(self, session_key, audio_format, buff, iv, isDebug=False, aud_params: AudioSetup = None):
-        super(AudioRealtime, self).__init__(session_key, audio_format, buff, iv, isDebug, aud_params)
+    """
+    This method for handling Realtime packets is a bit hand to mouth, and needs
+    at least a few packet's worth of buffer to handle jitter.
+    """
+    def __init__(
+            self,
+            session_key, iv,
+            audio_format, buff_size,
+            streamtype,
+            isDebug=False,
+            aud_params: AudioSetup = None
+    ):
+        super(AudioRealtime, self).__init__(
+            session_key, iv,
+            audio_format, buff_size,
+            streamtype,
+            isDebug,
+            aud_params
+        )
         self.isDebug = isDebug
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
@@ -443,7 +479,7 @@ class AudioRealtime(Audio):
         self.pa.terminate()
 
     def play(self, rtspconn, serverconn):
-        # for now RealTime does not use RTPBuffer at all, we don't use this method
+        # we don't use this method yet
         pass
 
     def serve(self, playerconn):
@@ -454,10 +490,27 @@ class AudioRealtime(Audio):
                 data, address = self.socket.recvfrom(4096)
                 if data:
                     rtp = RTP_REALTIME(data)
-                    self.handle(rtp)
+                    """ simple and naïve
+                    self.log(rtp)
                     audio = self.process(rtp)
                     if(audio):
                         self.sink.write(audio)
+                    """
+                    # This approach stabilizes output... somewhat
+                    self.log(rtp)
+                    self.rtp_buffer.add(rtp)
+
+                    fill = self.rtp_buffer.get_fullness()
+                    if (
+                        self.rtp_buffer.can_read()
+                        and fill > 0.4
+                        and fill < 0.7
+                    ):
+                        rtp = self.rtp_buffer.next()
+                        audio = self.process(rtp)
+                        if(audio):
+                            self.sink.write(audio)
+                            # time.sleep(1 / self.sample_rate)
         except KeyboardInterrupt:
             pass
         finally:
@@ -466,8 +519,21 @@ class AudioRealtime(Audio):
 
 
 class AudioBuffered(Audio):
-    def __init__(self, session_key, audio_format, buff, iv=None, isDebug=False, aud_params: AudioSetup = None):
-        super(AudioBuffered, self).__init__(session_key, audio_format, buff, iv, isDebug, aud_params)
+    def __init__(
+            self,
+            session_key, iv=None,
+            audio_format=None, buff_size=None,
+            streamtype=0,
+            isDebug=False,
+            aud_params: AudioSetup = None
+    ):
+        super(AudioBuffered, self).__init__(
+            session_key, iv,
+            audio_format, buff_size,
+            streamtype,
+            isDebug,
+            aud_params,
+        )
         self.isDebug = isDebug
         if self.isDebug:
             self.ab_file_logger = get_file_logger("AudioBuffered", level="DEBUG")
@@ -481,7 +547,7 @@ class AudioBuffered(Audio):
 
     def get_time_offset(self, rtp_ts):
         # gets the offset in millis from incoming RTP timestamp vs playout millis
-        # Usually fills to about ~120 seconds ahead.
+        # Usually fills to about ~120 seconds ahead for buffered streams.
         if not self.anchorRtpTime:
             return 0
         rtptime_offset = rtp_ts - self.anchorRtpTime
@@ -624,7 +690,7 @@ class AudioBuffered(Audio):
                     data = conn.recv(data_len - 2, socket.MSG_WAITALL)
 
                     rtp = RTP_BUFFERED(data)
-                    self.handle(rtp)
+                    self.log(rtp)
                     time_offset_ms = self.get_time_offset(rtp.timestamp)
                     # self.ab_screen_logger.debug(f"server: writing seq={rtp.sequence_no} offset={time_offset_ms} msec")
                     if seq_to_overtake is None:

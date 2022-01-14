@@ -23,18 +23,31 @@ class Stream:
         self.frames_packet = stream["spf"]
         self.type = stream["type"]
 
-        buff = buff // self.frames_packet
         self.control_port, self.control_proc = Control.spawn(self.isDebug)
         if self.type == Stream.REALTIME:
             self.session_iv = stream["shiv"] if "shiv" in stream else None
             self.server_control = stream["controlPort"]
             self.latency_min = stream["latencyMin"]
             self.latency_max = stream["latencyMax"]
+            # Define a small buffer size - enough to keep playback stable
+            buff = 2 * (self.latency_min // self.frames_packet)
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
-                self.session_key, self.audio_format, buff, self.session_iv, isDebug=self.isDebug, aud_params=None)
+                self.session_key, self.session_iv,
+                self.audio_format, buff,
+                self.type,
+                isDebug=self.isDebug,
+                aud_params=None,
+            )
         elif self.type == Stream.BUFFERED:
+            buff = buff // self.frames_packet
+            iv = None
             self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(
-                self.session_key, self.audio_format, buff, iv=None, isDebug=self.isDebug, aud_params=None)
+                self.session_key, iv,
+                self.audio_format, buff,
+                self.type,
+                isDebug=self.isDebug,
+                aud_params=None,
+            )
 
     def teardown(self):
         self.data_proc.terminate()
