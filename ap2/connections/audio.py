@@ -383,7 +383,7 @@ class Audio:
                     # decrypt the encrypted portion:
                     data = c.decrypt(rtp.payload[0:pl_len_crypted])
                     # append the unencrypted trailing bytes (fewer than 16)
-                    data += bytearray(rtp.payload[pl_len_crypted:pl_len])
+                    data += rtp.payload[pl_len_crypted:pl_len]
                 # else:
                 #     data = rtp.payload[0:pl_len]
             except (KeyError, ValueError) as e:
