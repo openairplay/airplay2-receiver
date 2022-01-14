@@ -15,7 +15,6 @@ import socketserver
 
 import netifaces as ni
 from hexdump import hexdump
-from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf, NonUniqueNameException
 from biplist import readPlistFromString, writePlistToString
 from biplist import InvalidPlistException, NotBinaryPlistException
