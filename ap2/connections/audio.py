@@ -294,7 +294,7 @@ class Audio:
         self.session_key = session_key
         self.session_iv = session_iv
         sk_len = len(session_key)
-        self.rsakey_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
+        self.key_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
         self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
         self.set_audio_params(self, audio_format)
 
@@ -372,7 +372,7 @@ class Audio:
 
     def decrypt(self, rtp):
         data = b''
-        if self.rsakey_and_iv:
+        if self.key_and_iv:
             try:
                 pl_len = len(rtp.payload)
                 pl_len_crypted = pl_len & ~0xf
