@@ -18,6 +18,7 @@ from hexdump import hexdump
 from Crypto.Cipher import ChaCha20_Poly1305, AES
 from zeroconf import IPVersion, ServiceInfo, Zeroconf, NonUniqueNameException
 from biplist import readPlistFromString, writePlistToString
+from biplist import InvalidPlistException, NotBinaryPlistException
 
 from ap2.playfair import PlayFair, FairPlayAES
 from ap2.airplay1 import AP1Security
@@ -228,7 +229,7 @@ def setup_global_structs(args, isDebug=False):
         # Source Version (airplay SDK?): absence triggers AP1 ANNOUNCE behaviour.
         "srcvers": SERVER_VERSION,
 
-        # RAOP Flags - (XX)
+        # RAOP Flags - ("xx") - mostly used with RAOP
         # These are found under the <deviceid>@<name> mDNS record.
         # Apple Model (name)
         # "am": "One",
@@ -241,8 +242,7 @@ def setup_global_structs(args, isDebug=False):
         # Encryption Key
         # "ek": "1",
         # Encryption Types. 0,1,3,4,5 == None, RSA, FairPlay, Mfi, FairPlay SAPv2.5
-        # "et": "3",
-        # "et": "0,1",
+        # "et": "0,1,3",
         # "et": "0,1,3,4,5",
         # Firmware version. p20 == AirPlay Src revision?
         # "fv": "p20.78000.12",
@@ -397,7 +397,7 @@ class SDPHandler():
                 self.aeskey = k.split(':')[1]
             elif 'a=fpaeskey:' in k:
                 self.has_fp = True
-                # FairPlay (v3?) AES key
+                # FairPlay AES key
                 self.aeskey = k.split(':')[1]
             elif 'a=aesiv:' in k:
                 self.aesiv = k.split(':')[1]
@@ -424,6 +424,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     pp = pprint.PrettyPrinter()
     ntp_port, ptp_port = 0, 0
     ntp_proc, ptp_proc = None, None
+    fairplay_keymsg = None
+    ecdh_shared_key = None
 
     # Maps paths to methods a la HAP-python
     HANDLERS = {
@@ -556,6 +558,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         self.server.hap = None
                     else:
                         if sdp.has_fp and self.fairplay_keymsg:
+                            SCR_LOG.debug('Got FP AES Key from SDP')
                             self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
                         elif sdp.has_rsa:
                             self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
@@ -973,20 +976,34 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 pf_info = PlayFair.fairplay_s()
                 response = pf.fairplay_setup(pf_info, body)
             if op == 'auth':
-                plist = readPlistFromString(body)
-                SCR_LOG.info(self.pp.pformat(plist))
-                if 'X-Apple-AT' in self.headers and self.headers["X-Apple-AT"] == '16':
-                    # Use flags: 144037111597568 / 0x830040DF0A00
-                    SCR_LOG.error('Unhandled edge-case for unencrypted auth setup')
-            hexdump(body) if DEBUG else ''
+                try:
+                    plist = readPlistFromString(body)
+                    SCR_LOG.info(self.pp.pformat(plist))
+                except InvalidPlistException as e:
+                    # Use flags: 00088200405f4200 or -ftxor 51
+                    SCR_LOG.error('Unhandled edge-case encrypted setup')
+                    self.send_response(404)
+                    return
 
-        self.send_response(200)
-        self.send_header("Content-Length", len(response))
-        self.send_header("Server", self.version_string())
-        self.send_header("CSeq", self.headers["CSeq"])
-        self.end_headers()
-        if op == 'fp':
-            self.wfile.write(response)
+                if 'X-Apple-AT' in self.headers and self.headers["X-Apple-AT"] == '16':
+                    """
+                    Use flags: 144037111597568 / 0x830040DF0A00 or -ftxor 23 (RSA)
+                    triggers: {'ascm': 1, 'tkrd': ['pair', 'auth', 'uuid']}
+                    """
+
+                    SCR_LOG.error('Unhandled edge-case for unencrypted auth setup')
+        if response:
+            self.send_response(200)
+            self.send_header("Content-Length", len(response))
+            self.send_header("Server", self.version_string())
+            self.send_header("CSeq", self.headers["CSeq"])
+            self.end_headers()
+            if op == 'fp':
+                self.wfile.write(response)
+        else:
+            SCR_LOG.error('Unhandled edge-case: FairPlay 2 encryption not supported.')
+            self.send_error(101)
+            return
 
     def handle_pair_setup(self):
         self.handle_pair_SV('setup')
@@ -1016,6 +1033,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             SCR_LOG.warning('MFi setup not yet possible. Disable feature bit 51.')
         elif self.server.hap.encrypted:
             hexdump(self.server.hap.accessory_shared_key) if DEBUG else ''
+            self.ecdh_shared_key = self.server.hap.accessory_shared_key
             self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
 
     def handle_pair_add(self):

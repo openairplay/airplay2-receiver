@@ -125,9 +125,9 @@ class PlayFair:
             keymsglen = 0  # type int
 
     def fairplay_setup(self, fp, request):
-        # if request[4] != 3:
-        #     # Unsupported fairplay version
-        #     return -1
+        if request[4] != 3:
+            # Unsupported fairplay version
+            return None
 
         type = request[self.TYPE_POSITION]
         seq = request[self.SEQ_POSITION]
