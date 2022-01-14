@@ -29,7 +29,9 @@ class Stream:
             self.server_control = stream["controlPort"]
             self.latency_min = stream["latencyMin"]
             self.latency_max = stream["latencyMax"]
-            # Define a small buffer size - enough to keep playback stable
+            """ Define a small buffer size - enough to keep playback stable
+            (11025//352) ≈ 0.25 seconds. Not 'realtime', but prevents jitter well.
+            """
             buff = 2 * (self.latency_min // self.frames_packet)
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
                 self.session_key, self.session_iv,

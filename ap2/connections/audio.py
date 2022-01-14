@@ -12,6 +12,9 @@ import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Cipher import AES
 from av.audio.format import AudioFormat
+from collections import deque
+from operator import attrgetter
+
 
 from ..utils import get_file_logger, get_screen_logger, get_free_tcp_socket, get_free_udp_socket
 
@@ -47,6 +50,82 @@ class RTP_BUFFERED(RTP):
         self.payload_type = 0
         self.marker = 0
         self.sequence_no = int.from_bytes(b'\0' + data[1:4], byteorder='big')
+
+
+class RTPRealtimeBuffer:
+    """
+    It's small, simple, resilient.
+    """
+    BUFFER_SIZE = 1
+
+    def __init__(self, size, isDebug=False):
+        self.BUFFER_SIZE = size
+        self.isDebug = isDebug
+        self.queue = deque(maxlen=self.BUFFER_SIZE + 1)
+        """
+        if self.isDebug:
+            self.rtp_logger = get_screen_logger('RTPRealtimeBuffer', level='DEBUG')
+        else:
+            self.rtp_logger = get_screen_logger('RTPRealtimeBuffer', level='INFO')
+        """
+
+    def append(self, rtp):
+        """ puts rtp into the bottom or left of the queue """
+        self.queue.appendleft(rtp)
+
+    def pop(self, seq=None, get_ts=False):
+        if seq is None or seq == 0:  # Start-up
+            return self.queue.pop()
+        else:
+            pos = self.find(seq, get_ts)
+            if pos == len(self.queue) - 1:  # at end
+                return self.queue.pop()
+            elif pos == 0:  # at start
+                return self.queue.popleft()
+            elif pos:  # in midst of queue (jitter)
+                r = self.queue[pos]
+                self.queue.remove(r)
+                return r
+
+    def get_filler(self):
+        """ just get top of buffer """
+        return self.queue[len(self.queue) - 1]
+
+    def amount(self):
+        """ fullness, content """
+        return len(self.queue) / self.queue.maxlen
+
+    def is_full(self):
+        return len(self.queue) == self.queue.maxlen
+
+    def is_empty(self):
+        return len(self.queue) == 0
+
+    def find(self, seq, get_ts=False):
+        """ returns queue index of the sought rtp seqNo/timestamp """
+        found = False
+        lowestFound = 0
+        length = len(self.queue)
+        attr = 'timestamp' if get_ts else 'sequence_no'
+        if length == 0:
+            return 0
+        for i in range(0, length, 1):
+            value = attrgetter(attr)(self.queue[i])
+            if value == seq:
+                found = True
+                return i
+        if found is False:
+            try:  # seek the next best
+                self.find_seq(seq + 1)
+            except RecursionError:
+                # Find lowest in the buffer
+                for i in range(0, length, 1):
+                    thisseq = attrgetter(attr)(self.queue[i])
+                    if i == 0:
+                        lowestFound = thisseq
+                    if thisseq < lowestFound:
+                        lowestFound = thisseq
+                return lowestFound
 
 
 # Very simple circular buffer implementation
@@ -295,7 +374,6 @@ class Audio:
         self.session_iv = session_iv
         sk_len = len(session_key)
         self.key_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
-        self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
         self.set_audio_params(self, audio_format)
 
     def init_audio_sink(self):
@@ -473,6 +551,7 @@ class AudioRealtime(Audio):
         self.isDebug = isDebug
         self.socket = get_free_udp_socket()
         self.port = self.socket.getsockname()[1]
+        self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
 
     def fini_audio_sink(self):
         self.sink.close()
@@ -484,33 +563,41 @@ class AudioRealtime(Audio):
 
     def serve(self, playerconn):
         self.init_audio_sink()
+        RTP_SEQ_SIZE = 2**16
+        RTP_ROLLOVER = RTP_SEQ_SIZE - 1  # 65535
+        lastRecvdSeqNo = 0
+        lastPlayedSeqNo = 0
+        playing = False
 
         try:
             while True:
                 data, address = self.socket.recvfrom(4096)
                 if data:
-                    rtp = RTP_REALTIME(data)
-                    """ simple and naïve
-                    self.log(rtp)
-                    audio = self.process(rtp)
-                    if(audio):
-                        self.sink.write(audio)
-                    """
-                    # This approach stabilizes output... somewhat
-                    self.log(rtp)
-                    self.rtp_buffer.add(rtp)
-
-                    fill = self.rtp_buffer.get_fullness()
+                    pkt = RTP_REALTIME(data)
+                    lastRecvdSeqNo = pkt.sequence_no
+                    self.log(pkt)
+                    self.rtp_buffer.append(pkt)
                     if (
-                        self.rtp_buffer.can_read()
-                        and fill > 0.4
-                        and fill < 0.7
+                        self.rtp_buffer.is_full()
                     ):
-                        rtp = self.rtp_buffer.next()
-                        audio = self.process(rtp)
-                        if(audio):
-                            self.sink.write(audio)
-                            # time.sleep(1 / self.sample_rate)
+                        try:
+                            if playing:
+                                rtp = self.rtp_buffer.pop((lastPlayedSeqNo + 1) % RTP_SEQ_SIZE)
+                            else:
+                                rtp = self.rtp_buffer.pop(0)
+                            if not rtp:  # There was a sequence jump (pkt loss)
+                                nextseq = self.rtp_buffer.find((lastPlayedSeqNo + 1) % RTP_SEQ_SIZE)
+                                rtp = self.rtp_buffer.pop(nextseq)
+                            if rtp:
+                                lastPlayedSeqNo = rtp.sequence_no
+                            audio = self.process(rtp)
+                            if(audio):
+                                self.sink.write(audio)
+                                playing = True
+                        except (RecursionError, TypeError) as e:
+                            self.audio_screen_logger.error(repr(e))
+                            playing = False
+                            pass
         except KeyboardInterrupt:
             pass
         finally:
@@ -543,6 +630,7 @@ class AudioBuffered(Audio):
         self.socket = get_free_tcp_socket()
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None  # local play start time in nanos
+        self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
         self.anchorRtpTime = None  # remote playback start in RTP Hz
 
     def get_time_offset(self, rtp_ts):
