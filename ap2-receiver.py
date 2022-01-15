@@ -801,12 +801,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle_feedback(self):
-        self.handle_generic()
+        self.handle_generic(feedback=True)
 
     def handle_audiomode(self):
         self.handle_generic()
 
-    def handle_generic(self):
+    def handle_generic(self, feedback=False):
         if self.headers["Content-Type"] == HTTP_CT_BPLIST:
             content_len = int(self.headers["Content-Length"])
             if content_len > 0:
@@ -818,7 +818,17 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
+        if feedback:
+            stream_data = {'streams': []}
+            for s in self.server.streams:
+                stream_data['streams'].append(s.getDescriptor())
+            # SCR_LOG.debug(stream_data)
+            res = writePlistToString(stream_data)
+            self.send_header("Content-Length", len(res))
+            self.send_header("Content-Type", HTTP_CT_BPLIST)
         self.end_headers()
+        if feedback:
+            self.wfile.write(res)
 
     def handle_auth_setup(self):
         self.handle_X_setup('auth')
