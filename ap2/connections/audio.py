@@ -497,11 +497,11 @@ class Audio:
                 self.audio_screen_logger.error(repr(e))
                 pass
 
-    def run(self, parent_reader_connection):
+    def run(self, rcvr_cmd_pipe):
         # This pipe is between player (read data) and server (write data)
-        parent_writer_connection, writer_connection = multiprocessing.Pipe()
-        server_thread = threading.Thread(target=self.serve, args=(writer_connection,))
-        player_thread = threading.Thread(target=self.play, args=(parent_reader_connection, parent_writer_connection))
+        here, there = multiprocessing.Pipe()
+        server_thread = threading.Thread(target=self.serve, args=(there,))
+        player_thread = threading.Thread(target=self.play, args=(rcvr_cmd_pipe, here))
 
         server_thread.start()
         player_thread.start()
@@ -525,11 +525,11 @@ class Audio:
             aud_params,
         )
         # This pipe is reachable from receiver
-        parent_reader_connection, audio.audio_connection = multiprocessing.Pipe()
-        mainprocess = multiprocessing.Process(target=audio.run, args=(parent_reader_connection,))
-        mainprocess.start()
+        rcvr_cmd_pipe, audio.command_chan = multiprocessing.Pipe()
+        audio_proc = multiprocessing.Process(target=audio.run, args=(rcvr_cmd_pipe,))
+        audio_proc.start()
 
-        return audio.port, mainprocess, audio.audio_connection
+        return audio.port, audio_proc, audio.command_chan
 
 
 class AudioRealtime(Audio):
