@@ -44,6 +44,7 @@ DEV_PROPS = None
 # The chosen interface's IPv4/6
 IPV4 = None
 IPV6 = None
+IPADDR = None
 # Globally assign the device name provided from the command line
 DEV_NAME = None
 # Object to hold our mDNS broadcaster
@@ -120,7 +121,7 @@ def update_status_flags(flag=None, on=False, push=True):
 def setup_global_structs(args, isDebug=False):
     global device_info
     global device_setup
-    global device_setup_data
+    global stream_setup_data
     global second_stage_info
     global mdns_props
     global LTPK_OBJ
@@ -191,13 +192,8 @@ def setup_global_structs(args, isDebug=False):
             'ID': DEVICE_ID
         }
 
-    device_setup_data = {
+    stream_setup_data = {
         'streams': [
-            {
-                'type': 96,
-                'dataPort': 0,    # AP2 receiver data server
-                'controlPort': 0  # AP2 receiver control server
-            }
         ]
     }
 
@@ -464,7 +460,13 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 'controlPort': 0,
             }
 
-            streamobj = Stream(stream, AIRPLAY_BUFFER, DEBUG, self.aud_params)
+            streamobj = Stream(
+                stream,
+                IPADDR,
+                buff_size=AIRPLAY_BUFFER,
+                isDebug=DEBUG,
+                aud_params=self.aud_params
+            )
 
             self.server.streams.append(streamobj)
 
@@ -530,20 +532,28 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(res)
                     SCR_LOG.info('')
                 else:
-                    SCR_LOG.debug("Sending CONTROL/DATA:")
-                    stream = Stream(plist["streams"][0], AIRPLAY_BUFFER, DEBUG)
-                    set_volume_pid(stream.data_proc.pid)
-                    self.server.streams.append(stream)
-                    device_setup_data["streams"][0]["controlPort"] = stream.control_port
-                    device_setup_data["streams"][0]["dataPort"] = stream.data_port
+                    for stream in plist["streams"]:
+                        s = Stream(
+                            stream,
+                            IPADDR,
+                            buff_size=AIRPLAY_BUFFER,
+                            isDebug=DEBUG,
+                        )
+                        SCR_LOG.debug("Building stream channels:")
+                        self.server.streams.append(s)
+                        stream_setup_data["streams"].append(
+                            s.descriptor
+                        )
 
-                    SCR_LOG.debug(f"[+] controlPort={stream.control_port} dataPort={stream.data_port}")
-                    if stream.type == Stream.BUFFERED:
-                        device_setup_data["streams"][0]["type"] = stream.type
-                        device_setup_data["streams"][0]["audioBufferSize"] = AIRPLAY_BUFFER
+                        SCR_LOG.debug(s.getSummaryMessage())
 
-                    SCR_LOG.debug(self.pp.pformat(device_setup_data))
-                    res = writePlistToString(device_setup_data)
+                        if s.getStreamType() == Stream.BUFFERED:
+                            set_volume_pid(s.getControlProc().pid)
+                        if s.getStreamType() == Stream.REALTIME:
+                            set_volume_pid(s.getControlProc().pid)
+
+                    SCR_LOG.debug(self.pp.pformat(stream_setup_data))
+                    res = writePlistToString(stream_setup_data)
 
                     self.send_response(200)
                     self.send_header("Content-Length", len(res))
@@ -643,6 +653,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
+        # TODO: get actual playout latency
+        self.send_header("Audio-Latency", "0")
         self.end_headers()
 
     def do_SETRATEANCHORTIME(self):
@@ -678,10 +690,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 if "streams" in plist:
-                    stream_id = plist["streams"][0]["streamID"]
-                    stream = self.server.streams[stream_id]
-                    stream.teardown()
-                    del self.server.streams[stream_id]
+                    for s in plist["streams"]:
+                        stream_id = s["streamID"]
+                        stream = self.server.streams[stream_id]
+                        stream.teardown()
+                        del self.server.streams[stream_id]
                 SCR_LOG.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
@@ -1309,11 +1322,13 @@ if __name__ == "__main__":
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 SCR_LOG.info(f"serving at port {PORT}")
                 IPADDR_BIN = IP6ADDR_BIN
+                IPADDR = IPV6
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
                 SCR_LOG.info(F"serving at port {PORT}")
                 IPADDR_BIN = IP4ADDR_BIN
+                IPADDR = IPV4
                 httpd.serve_forever()
 
     except KeyboardInterrupt:

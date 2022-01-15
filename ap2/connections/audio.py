@@ -356,6 +356,7 @@ class Audio:
 
     def __init__(
             self,
+            addr,
             session_key, session_iv=None,
             audio_format=None, buff_size=None,
             streamtype=0,
@@ -363,6 +364,7 @@ class Audio:
             aud_params: AudioSetup = None,
     ):
         self.isDebug = isDebug
+        self.addr = addr
         if self.isDebug:
             self.audio_file_logger = get_file_logger("Audio.debug", level="DEBUG")
             self.audio_screen_logger = get_screen_logger("Audio.Main", level="DEBUG")
@@ -507,6 +509,7 @@ class Audio:
     @classmethod
     def spawn(
             cls,
+            addr,
             session_key, iv=None,
             audio_format=0, buff_size=None,
             streamtype=0,
@@ -514,6 +517,7 @@ class Audio:
             aud_params: AudioSetup = None,
     ):
         audio = cls(
+            addr,
             session_key, iv,
             audio_format, buff_size,
             streamtype,
@@ -535,6 +539,7 @@ class AudioRealtime(Audio):
     """
     def __init__(
             self,
+            addr,
             session_key, iv,
             audio_format, buff_size,
             streamtype,
@@ -542,6 +547,7 @@ class AudioRealtime(Audio):
             aud_params: AudioSetup = None
     ):
         super(AudioRealtime, self).__init__(
+            addr,
             session_key, iv,
             audio_format, buff_size,
             streamtype,
@@ -549,7 +555,7 @@ class AudioRealtime(Audio):
             aud_params
         )
         self.isDebug = isDebug
-        self.socket = get_free_socket()
+        self.socket = get_free_socket(addr)
         self.port = self.socket.getsockname()[1]
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
 
@@ -608,6 +614,7 @@ class AudioRealtime(Audio):
 class AudioBuffered(Audio):
     def __init__(
             self,
+            addr,
             session_key, iv=None,
             audio_format=None, buff_size=None,
             streamtype=0,
@@ -615,6 +622,7 @@ class AudioBuffered(Audio):
             aud_params: AudioSetup = None
     ):
         super(AudioBuffered, self).__init__(
+            addr,
             session_key, iv,
             audio_format, buff_size,
             streamtype,
@@ -627,7 +635,7 @@ class AudioBuffered(Audio):
             self.ab_screen_logger = get_screen_logger("AudioBuffered", level='DEBUG')
         else:
             self.ab_screen_logger = get_screen_logger("AudioBuffered", level="INFO")
-        self.socket = get_free_socket(tcp=True)
+        self.socket = get_free_socket(addr, tcp=True)
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None  # local play start time in nanos
         self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
