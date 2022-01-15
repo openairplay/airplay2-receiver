@@ -1111,15 +1111,6 @@ def unregister_mdns(zeroconf, info, remove=True):
             zeroconf.close()
 
 
-def get_free_port():
-    free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    free_socket.bind(('0.0.0.0', 0))
-    free_socket.listen(5)
-    port = free_socket.getsockname()[1]
-    free_socket.close()
-    return port
-
-
 class AP2Server(socketserver.TCPServer):
     # Fixes 99% of scenarios on restart after we terminate uncleanly/crash
     # and port was not closed before crash (is still open).
