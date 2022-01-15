@@ -16,7 +16,7 @@ from collections import deque
 from operator import attrgetter
 
 
-from ..utils import get_file_logger, get_screen_logger, get_free_tcp_socket, get_free_udp_socket
+from ..utils import get_file_logger, get_screen_logger, get_free_socket
 
 
 class RTP:
@@ -549,7 +549,7 @@ class AudioRealtime(Audio):
             aud_params
         )
         self.isDebug = isDebug
-        self.socket = get_free_udp_socket()
+        self.socket = get_free_socket()
         self.port = self.socket.getsockname()[1]
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
 
@@ -627,7 +627,7 @@ class AudioBuffered(Audio):
             self.ab_screen_logger = get_screen_logger("AudioBuffered", level='DEBUG')
         else:
             self.ab_screen_logger = get_screen_logger("AudioBuffered", level="INFO")
-        self.socket = get_free_tcp_socket()
+        self.socket = get_free_socket(tcp=True)
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicTime = None  # local play start time in nanos
         self.rtp_buffer = RTPBuffer(buff_size, self.isDebug)
