@@ -36,16 +36,16 @@ FEATURES = 0x1c340405fca00
 # # FEATURES = 0x1c340405fca00 equals the below mask
 FEATURES = (
     FeatureFlags.Ft48TransientPairing
-    | FeatureFlags.Ft47PeerMgmt
-    | FeatureFlags.Ft46HKPairing
+    | FeatureFlags.Ft47PeerManagement
+    | FeatureFlags.Ft46HomeKitPairing
     | FeatureFlags.Ft41_PTPClock
     | FeatureFlags.Ft40BufferedAudio
-    | FeatureFlags.Ft38CtrlChanEncrypt
-    | FeatureFlags.Ft30UnifiedAdvertInf
+    | FeatureFlags.Ft38ControlChannelEncrypt
+    | FeatureFlags.Ft30UnifiedAdvertisingInfo
     | FeatureFlags.Ft22AudioUnencrypted
-    | FeatureFlags.Ft20RcvAudAAC_LC
-    | FeatureFlags.Ft19RcvAudALAC
-    | FeatureFlags.Ft18RcvAudPCM
+    | FeatureFlags.Ft20ReceiveAudioAAC_LC
+    | FeatureFlags.Ft19ReceiveAudioALAC
+    | FeatureFlags.Ft18ReceiveAudioPCM
     | FeatureFlags.Ft17AudioMetaTxtDAAP
     | FeatureFlags.Ft16AudioMetaProgress
     | FeatureFlags.Ft15AudioMetaCovers
@@ -60,101 +60,103 @@ class FeatureFlags(IntFlag):
     # https://emanuelecozzi.net/docs/airplay2/features/
     # https://openairplay.github.io/airplay-spec/features.html
     # https://nto.github.io/AirPlay.html
-    Ft00Video            = 0x0000000000000001  # 1<<0
-    Ft01Photo            = 0x0000000000000002  # 1<<1
-    Ft02VideoFairPlay    = 0x0000000000000004  # 1<<2
-    Ft03VideoVolumeCtrl  = 0x0000000000000008  # 1<<3
-    Ft04VideoHTTPLiveStr = 0x0000000000000010  # 1<<4
-    Ft05Slideshow        = 0x0000000000000020  # 1<<5
-    Ft06_Unknown         = 0x0000000000000040  # 1<<6
+    Ft00Video = 1 << 0
+    Ft01Photo = 1 << 1
+    Ft02VideoFairPlay = 1 << 2
+    Ft03VideoVolumeCtrl = 1 << 3
+    Ft04VideoHTTPLiveStreaming = 1 << 4
+    Ft05Slideshow = 1 << 5
+    Ft06_Unknown = 1 << 6
     # 07: seems to need NTP
-    Ft07ScreenMirroring  = 0x0000000000000080  # 1<<7
-    Ft08ScreenRotate     = 0x0000000000000100  # 1<<8
+    Ft07ScreenMirroring = 1 << 7
+    Ft08ScreenRotate = 1 << 8
     # Ft09 is necessary for iPhones/Music: audio
-    Ft09AirPlayAudio     = 0x0000000000000200  # 1<<9
-    Ft10Unknown          = 0x0000000000000400  # 1<<10
-    Ft11AudioRedundant   = 0x0000000000000800  # 1<<11
+    Ft09AirPlayAudio = 1 << 9
+    Ft10Unknown = 1 << 10
+    Ft11AudioRedundant = 1 << 11
     # Feat12: iTunes4Win ends ANNOUNCE with rsaaeskey, does not attempt FPLY auth.
     # also coerces frequent OPTIONS packets (keepalive) from iPhones.
-    Ft12FPSAPv2p5_AES_GCM = 0x0000000000001000  # 1<<12
+    Ft12FPSAPv2p5_AES_GCM = 1 << 12
     # 13-14 MFi stuff.
-    Ft13MFiHardware      = 0x0000000000002000  # 1<<13
+    Ft13MFiHardware = 1 << 13
     # Music on iPhones needs this to stream audio
-    Ft14MFiSoft_FairPlay = 0x0000000000004000  # 1<<14
+    Ft14MFiSoft_FairPlay = 1 << 14
     # 15-17 not mandatory - faster pairing without
-    Ft15AudioMetaCovers  = 0x0000000000008000  # 1<<15
-    Ft16AudioMetaProgress = 0x0000000000010000  # 1<<16
-    Ft17AudioMetaTxtDAAP = 0x0000000000020000  # 1<<17
+    Ft15AudioMetaCovers = 1 << 15
+    Ft16AudioMetaProgress = 1 << 16
+    Ft17AudioMetaTxtDAAP = 1 << 17
     # macOS needs 18 to pair
-    Ft18RcvAudPCM        = 0x0000000000040000  # 1<<18
+    Ft18ReceiveAudioPCM = 1 << 18
     # macOS needs 19
-    Ft19RcvAudALAC       = 0x0000000000080000  # 1<<19
+    Ft19ReceiveAudioALAC = 1 << 19
     # iOS needs 20
-    Ft20RcvAudAAC_LC     = 0x0000000000100000  # 1<<20
-    Ft21Unknown          = 0x0000000000200000  # 1<<21
+    Ft20ReceiveAudioAAC_LC = 1 << 20
+    Ft21Unknown = 1 << 21
     # Try Ft22 without Ft40 - ANNOUNCE + SDP
-    Ft22AudioUnencrypted = 0x0000000000400000  # 1<<22
-    Ft23RSA_Auth         = 0x0000000000800000  # 1<<23
-    Ft24Unknown          = 0x0000000001000000  # 1<<24
+    Ft22AudioUnencrypted = 1 << 22
+    Ft23RSA_Auth = 1 << 23
+    Ft24Unknown = 1 << 24
     # Pairing stalls with longer /auth-setup string w/26
     # Ft25 seems to require ANNOUNCE
-    Ft25iTunes4WEncrypt  = 0x0000000002000000  # 1<<25
+    Ft25iTunes4WEncryption = 1 << 25
     # try Ft26 without Ft40. Ft26 = crypt audio? mutex w/Ft22?
-    Ft26Audio_AES_Mfi    = 0x0000000004000000  # 1<<26
+    Ft26Audio_AES_Mfi = 1 << 26
     # 27: connects and works OK
-    Ft27LegacyPairing    = 0x0000000008000000  # 1<<27
-    Ft28_Unknown         = 0x0000000010000000  # 1<<28
-    Ft29plistMetaData    = 0x0000000020000000  # 1<<29
-    Ft30UnifiedAdvertInf = 0x0000000040000000  # 1<<30
-    # Bit 31 Reserved     =  # 1<<31
-    Ft32CarPlay          = 0x0000000100000000  # 1<<32
-    Ft33AirPlayVidPlayQ  = 0x0000000200000000  # 1<<33
-    Ft34AirPlayFromCloud = 0x0000000400000000  # 1<<34
-    Ft35TLS_PSK          = 0x0000000800000000  # 1<<35
-    Ft36_Unknown         = 0x0000001000000000  # 1<<36
-    Ft37CarPlayCtrl      = 0x0000002000000000  # 1<<37
+    Ft27LegacyPairing = 1 << 27
+    Ft28_Unknown = 1 << 28
+    Ft29plistMetaData = 1 << 29
+    Ft30UnifiedAdvertisingInfo = 1 << 30
+    # Bit 31 Reserved     =  # 1 << 31
+    Ft32CarPlay = 1 << 32
+    Ft33AirPlayVideoPlayQueue = 1 << 33
+    Ft34AirPlayFromCloud = 1 << 34
+    Ft35TLS_PSK = 1 << 35
+    Ft36_Unknown = 1 << 36
+    Ft37CarPlayControl = 1 << 37
     # 38 seems to be implicit with other flags; works with or without 38.
-    Ft38CtrlChanEncrypt  = 0x0000004000000000  # 1<<38
-    Ft39_Unknown         = 0x0000008000000000  # 1<<39
+    Ft38ControlChannelEncrypt = 1 << 38
+    Ft39_Unknown = 1 << 39
     # 40 absence: requires ANNOUNCE method
-    Ft40BufferedAudio    = 0x0000010000000000  # 1<<40
-    Ft41_PTPClock        = 0x0000020000000000  # 1<<41
-    Ft42ScreenMultiCodec = 0x0000040000000000  # 1<<42
+    Ft40BufferedAudio = 1 << 40
+    Ft41_PTPClock = 1 << 41
+    Ft42ScreenMultiCodec = 1 << 42
     # 43
-    Ft43SystemPairing    = 0x0000080000000000  # 1<<43
-    Ft44APValeriaScrSend = 0x0000100000000000  # 1<<44
-    # 45: macOS wont connect, iOS will, but dies on play. 45<->41 seem mut.ex.
+    Ft43SystemPairing = 1 << 43
+    Ft44APValeriaScreenSend = 1 << 44
+    # 45: macOS wont connect, iOS will, but dies on play.
+    # 45 || 41; seem mutually exclusive.
     # 45 triggers stream type:96 (without ft41, PTP)
-    Ft45_NTPClock        = 0x0000200000000000  # 1<<45
-    Ft46HKPairing        = 0x0000400000000000  # 1<<46
-    Ft47PeerMgmt         = 0x0000800000000000  # 1<<47
-    Ft48TransientPairing = 0x0001000000000000  # 1<<48
-    Ft49AirPlayVideoV2   = 0x0002000000000000  # 1<<49
-    Ft50NowPlayingInfo   = 0x0004000000000000  # 1<<50
-    Ft51MfiPairSetup     = 0x0008000000000000  # 1<<51
-    Ft52PeersExtMsg      = 0x0010000000000000  # 1<<52
-    Ft53_Unknown         = 0x0020000000000000  # 1<<53
-    Ft54SupportsAPSync   = 0x0040000000000000  # 1<<54
-    Ft55SupportsWoL      = 0x0080000000000000  # 1<<55
-    Ft56SupportsWoL      = 0x0100000000000000  # 1<<56
-    Ft57_Unknown         = 0x0200000000000000  # 1<<57
-    Ft58HangdogRemote    = 0x0400000000000000  # 1<<58
-    Ft59AudStreamConnStp = 0x0800000000000000  # 1<<59
-    Ft60AudMediaDataCtrl = 0x1000000000000000  # 1<<60
-    Ft61RFC2198Redundant = 0x2000000000000000  # 1<<61
-    Ft62_Unknown         = 0x4000000000000000  # 1<<62
+    Ft45_NTPClock = 1 << 45
+    Ft46HomeKitPairing = 1 << 46
+    # 47: For PTP
+    Ft47PeerManagement = 1 << 47
+    Ft48TransientPairing = 1 << 48
+    Ft49AirPlayVideoV2 = 1 << 49
+    Ft50NowPlayingInfo = 1 << 50
+    Ft51MfiPairSetup = 1 << 51
+    Ft52PeersExtendedMessage = 1 << 52
+    Ft53_Unknown = 1 << 53
+    Ft54SupportsAPSync = 1 << 54
+    Ft55SupportsWoL = 1 << 55
+    Ft56SupportsWoL = 1 << 56
+    Ft57_Unknown = 1 << 57
+    Ft58HangdogRemote = 1 << 58
+    Ft59AudioStreamConnectionSetup = 1 << 59
+    Ft60AudioMediaDataControl = 1 << 60
+    Ft61RFC2198Redundant = 1 << 61
+    Ft62_Unknown = 1 << 62
     """
     Ft51 - macOS sits for a while. Perhaps trying a closed connection port or medium?;
      iOS just fails at Pair-Setup [2/5]
     """
     def GetDefaultAirplayTwoFlags(self):
         return (
-            self.Ft48TransientPairing | self.Ft47PeerMgmt | self.Ft46HKPairing
+            self.Ft48TransientPairing | self.Ft47PeerManagement | self.Ft46HomeKitPairing
             | self.Ft41_PTPClock
             | self.Ft40BufferedAudio
-            | self.Ft30UnifiedAdvertInf
+            | self.Ft30UnifiedAdvertisingInfo
             | self.Ft22AudioUnencrypted
-            | self.Ft20RcvAudAAC_LC | self.Ft19RcvAudALAC | self.Ft18RcvAudPCM
+            | self.Ft20ReceiveAudioAAC_LC | self.Ft19ReceiveAudioALAC | self.Ft18ReceiveAudioPCM
             | self.Ft17AudioMetaTxtDAAP
             | self.Ft16AudioMetaProgress
             # | self.Ft15AudioMetaCovers
@@ -166,40 +168,40 @@ class FeatureFlags(IntFlag):
         return self.Ft12FPSAPv2p5_AES_GCM
 
     def getFeature19ALAC(self):
-        return self.Ft19RcvAudALAC
+        return self.Ft19ReceiveAudioALAC
 
     def getFeature20AAC(self):
-        return self.Ft20RcvAudAAC_LC
+        return self.Ft20ReceiveAudioAAC_LC
 
 
 class StatusFlags(IntFlag):
-    StatusNone                     = 0x000000  # 0
-    ProblemsExist                  = 0x000001  # 1<< 0
+    StatusNone = 0
+    ProblemsExist = 1 << 0
     # Probably a WAC (wireless accessory ctrl) thing:
-    Not_yet_configured             = 0x000002  # 1<< 1
+    Not_yet_configured = 1 << 1
     # Audio cable attached (legacy): all is well.
-    AudioLink                      = 0x000004  # 1<< 2
-    PINmode                        = 0x000008  # 1<< 3
-    PINentry                       = 0x000010  # 1<< 4
-    PINmatch                       = 0x000020  # 1<< 5
-    SupportsAirPlayFromCloud       = 0x000040  # 1<< 6
+    AudioLink = 1 << 2
+    PINmode = 1 << 3
+    PINentry = 1 << 4
+    PINmatch = 1 << 5
+    SupportsAirPlayFromCloud = 1 << 6
     # Need password to use
-    PasswordNeeded                 = 0x000080  # 1<< 7
-    StatusUnknown_08               = 0x000100  # 1<< 8
+    PasswordNeeded = 1 << 7
+    StatusUnknown_08 = 1 << 8
     # need PIN to pair - client will request PIN based auth
-    PairingPIN_aka_OTP             = 0x000200  # 1<< 9
+    PairingPIN_aka_OTP = 1 << 9
     # Note: prevents adding to HomeKit when set.
-    Enable_HK_Access_Control       = 0x000400  # 1<<10
+    Enable_HK_Access_Control = 1 << 10
     # Shows in logs as relayable. iOS connects to get currently playing track
-    RemoteControlRelay             = 0x000800  # 1<<11
-    SilentPrimary                  = 0x001000  # 1<<12
-    TightSyncIsGroupLeader         = 0x002000  # 1<<13
-    TightSyncBuddyNotReachable     = 0x004000  # 1<<14
-    IsAppleMusicSubscriber         = 0x008000  # 1<<15
-    iCloudLibraryIsOn              = 0x010000  # 1<<16
-    ReceiverSessionIsActive        = 0x020000  # 1<<17
-    StatusUnknown_18               = 0x040000  # 1<<18
-    StatusUnknown_19               = 0x080000  # 1<<19
+    RemoteControlRelay = 1 << 11
+    SilentPrimary = 1 << 12
+    TightSyncIsGroupLeader = 1 << 13
+    TightSyncBuddyNotReachable = 1 << 14
+    IsAppleMusicSubscriber = 1 << 15
+    iCloudLibraryIsOn = 1 << 16
+    ReceiverSessionIsActive = 1 << 17
+    StatusUnknown_18 = 1 << 18
+    StatusUnknown_19 = 1 << 19
     """
     possibly others
     """
