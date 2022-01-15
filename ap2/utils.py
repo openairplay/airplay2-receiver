@@ -138,16 +138,25 @@ def get_free_port():
     return port
 
 
-def get_free_tcp_socket():
-    free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    free_socket.bind(('0.0.0.0', 0))
-    free_socket.listen(5)
-    return free_socket
+def get_free_socket(addr=None, tcp=False):
+    v4 = True
+    stype = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
+    free_socket = None
 
-
-def get_free_udp_socket():
-    free_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    free_socket.bind(('0.0.0.0', 0))
+    if len(addr.split(".")) == 4:
+        free_socket = socket.socket(socket.AF_INET, stype)
+    else:
+        free_socket = socket.socket(socket.AF_INET6, stype)
+        v4 = False
+    if addr:
+        free_socket.bind((addr, 0))
+    else:
+        if v4:
+            free_socket.bind(('0.0.0.0', 0))
+        else:
+            free_socket.bind(('::', 0))
+    if tcp:
+        free_socket.listen(5)
     return free_socket
 
 
