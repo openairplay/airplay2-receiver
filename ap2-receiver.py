@@ -25,6 +25,7 @@ from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
 from ap2.pairing.hap import Hap, HAPSocket, LTPK, DeviceProperties
 from ap2.connections.event import EventGeneric
 from ap2.connections.stream import Stream
+from ap2.connections.session_properties import Session
 from ap2.dxxp import parse_dxxp
 from ap2.bitflags import FeatureFlags, StatusFlags
 from ap2.sdphandler import SDPHandler
@@ -275,6 +276,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     ntp_proc, ptp_proc = None, None
     fairplay_keymsg = None
     ecdh_shared_key = None
+    session = None
 
     # Maps paths to methods a la HAP-python
     HANDLERS = {
@@ -509,10 +511,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 plist = readPlistFromString(body)
                 SCR_LOG.debug(self.pp.pformat(plist))
-                if 'eiv' in plist and 'ekey' in plist:
-                    self.aesiv = plist['eiv']
-                    self.aeskey = plist['ekey']
-                    self.aeskeyobj = FairPlayAES(fpaeskey=self.aeskey, aesiv=self.aesiv, keymsg=self.fairplay_keymsg)
+
+                session = Session(plist, self.fairplay_keymsg)
 
                 if "streams" not in plist:
                     SCR_LOG.debug("Sending EVENT:")
@@ -711,9 +711,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.event_proc.terminate()
         if(self.ntp_proc):
             self.ntp_proc.terminate()
+
         # When changing from RTP_BUFFERED to REALTIME, must clean up:
         for stream in self.server.streams:
             stream.teardown()
+
+        if len(self.server.streams) == 0:
+            session = None
+
         self.server.streams.clear()
 
     def do_SETPEERS(self):
