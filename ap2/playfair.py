@@ -42,6 +42,7 @@ class FairPlayAES():
                  keymsg=None,  # Needed to decrypt the FP AES keys
                  ):
         self.logger = get_screen_logger(__name__, 'DEBUG')
+        self.aesiv = None
         if rsaaeskeyb64:
             airportkey = RSA.importKey(AIRPORT_PRIVATE_KEY)
             cipher = PKCS1_OAEP.new(airportkey)
@@ -79,6 +80,12 @@ class FairPlayAES():
         elif aesiv:
             self.aesiv = aesiv
             self.logger.info('Got AES IV')
+
+    def getAESKey(self):
+        return self.aeskey
+
+    def getAESIV(self):
+        return self.aesiv
 
 
 def decodeb64(_input):
