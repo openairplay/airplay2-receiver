@@ -57,11 +57,11 @@ class Stream:
             """ Define a small buffer size - enough to keep playback stable
             (11025//352) ≈ 0.25 seconds. Not 'realtime', but prevents jitter well.
             """
-            self.buff_size = 2 * (self.latency_min // self.frames_packet)
+            buffer = 2 * (self.latency_min // self.frames_packet)
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
                 self.addr,
                 self.session_key, self.session_iv,
-                self.audio_format, self.buff_size,
+                self.audio_format, buffer,
                 self.streamtype,
                 isDebug=self.isDebug,
                 aud_params=None,
@@ -73,12 +73,12 @@ class Stream:
                 'audioBufferSize': self.buff_size,
             }
         elif self.streamtype == Stream.BUFFERED:
-            self.buff_size = buff_size // self.frames_packet
+            buffer = buff_size // self.frames_packet
             iv = None
             self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(
                 self.addr,
                 self.session_key, iv,
-                self.audio_format, self.buff_size,
+                self.audio_format, buffer,
                 self.streamtype,
                 isDebug=self.isDebug,
                 aud_params=None,
@@ -88,7 +88,7 @@ class Stream:
                 'controlPort': self.control_port,
                 'dataPort': self.data_port,
                 # Reply with the passed buff size, not the calculated array size
-                'audioBufferSize': buff_size,
+                'audioBufferSize': self.buff_size,
             }
 
     def getStreamType(self):
