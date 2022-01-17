@@ -2,6 +2,7 @@ import multiprocessing
 
 from .control import Control
 from .audio import AudioRealtime, AudioBuffered
+from .stream_connection import StreamConnection
 
 
 class Stream:
@@ -22,8 +23,23 @@ class Stream:
         self.data_port = 0
 
         self.control_port = 0
+        """stat fields at teardown
+        ccCountAPSender
+        ccCountNonAPSender
+        ccCountSender
+        """
         # type should always be present
         self.streamtype = stream["type"]
+        # A uint64:
+        self.streamConnectionID = stream["streamConnectionID"] if "streamConnectionID" in stream else None
+        # A boolean:
+        self.supportsDynamicStreamID = stream["supportsDynamicStreamID"] if "supportsDynamicStreamID" in stream else None
+        # bit 59 is enabled:
+        # Array
+        if 'streamConnections' in stream:
+            self.streamConnections = []
+            for sc in stream["streamConnections"]:
+                self.streamConnections.append(StreamConnection(sc))
 
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
             self.control_port, self.control_proc = Control.spawn(self.isDebug)
