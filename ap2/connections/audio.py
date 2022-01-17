@@ -41,7 +41,6 @@ class RTP_REALTIME(RTP):
         self.payload_type = data[1] & 0b01111111
         self.marker = (data[1] & 0b10000000) >> 7
         self.sequence_no = int.from_bytes(data[2:4], byteorder='big')
-        self.payload = data[12:]  # This is true for ANNOUNCE from iTunes4Win streams
 
 
 class RTP_BUFFERED(RTP):
@@ -454,18 +453,20 @@ class Audio:
         data = b''
         if self.key_and_iv:
             try:
-                pl_len = len(rtp.payload)
+                pl_len = len(rtp.payload) + len(rtp.tag) + len(rtp.nonce)
+                # Older streaming model has different payload boundary: pkt end.
+                payload = memoryview(rtp.payload + rtp.tag + rtp.nonce)
                 pl_len_crypted = pl_len & ~0xf
                 pl_len_clear = pl_len & 0xf
                 if(pl_len_crypted % 16 == 0):
                     # Decrypt using RSA key
                     c  = AES.new(key=self.session_key, mode=AES.MODE_CBC, iv=self.session_iv)
                     # decrypt the encrypted portion:
-                    data = c.decrypt(rtp.payload[0:pl_len_crypted])
+                    data = c.decrypt(payload[0:pl_len_crypted])
                     # append the unencrypted trailing bytes (fewer than 16)
-                    data += rtp.payload[pl_len_crypted:pl_len]
+                    data += payload[pl_len_crypted:pl_len]
                 # else:
-                #     data = rtp.payload[0:pl_len]
+                #     data = payload[0:pl_len]
             except (KeyError, ValueError) as e:
                 self.audio_screen_logger.error(f'RTP AES MODE_CBC decrypt: {repr(e)}')
         else:
