@@ -1442,10 +1442,10 @@ class HAPSocket:
                     block_length_bytes = self.socket.recv(self.LENGTH_LENGTH)
                     if not block_length_bytes:
                         return result
-                except ConnectionResetError:
+                    assert len(block_length_bytes) == self.LENGTH_LENGTH
+                except (ConnectionResetError, UnboundLocalError):
                     self.logger.error('HAP connection destroyed (unexpectedly).')
-
-                assert len(block_length_bytes) == self.LENGTH_LENGTH
+                    break
 
                 self.curr_in_total = \
                     struct.unpack("H", block_length_bytes)[0] + 16
