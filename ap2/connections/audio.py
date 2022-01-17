@@ -116,7 +116,7 @@ class RTPRealtimeBuffer:
                 return i
         if found is False:
             try:  # seek the next best
-                self.find_seq(seq + 1)
+                self.find(seq + 1)
             except RecursionError:
                 # Find lowest in the buffer
                 for i in range(0, length, 1):
