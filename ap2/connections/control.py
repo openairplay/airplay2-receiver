@@ -41,13 +41,12 @@ class Control:
                 self.logger.debug(msg)
 
     def serve(self):
-        if self.isDebug:
-            self.logger = get_file_logger("control", level="DEBUG")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        addr = ("0.0.0.0", self.port)
-        sock.bind(addr)
-
         try:
+            if self.isDebug:
+                self.logger = get_file_logger("control", level="DEBUG")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            addr = ("0.0.0.0", self.port)
+            sock.bind(addr)
             while True:
                 data, address = sock.recvfrom(4096)
                 if data:
@@ -55,6 +54,8 @@ class Control:
                     self.handle(rtcp)
         except KeyboardInterrupt:
             pass
+        except OSError as e:
+            self.logger.error(f'{repr(e)}')
         finally:
             sock.close()
 
