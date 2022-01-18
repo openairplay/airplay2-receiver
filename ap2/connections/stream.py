@@ -57,7 +57,7 @@ class Stream:
             """ Define a small buffer size - enough to keep playback stable
             (11025//352) ≈ 0.25 seconds. Not 'realtime', but prevents jitter well.
             """
-            buffer = 2 * (self.latency_min // self.frames_packet)
+            buffer = (self.latency_max // self.frames_packet)
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
                 self.addr,
                 self.session_key, self.session_iv,
