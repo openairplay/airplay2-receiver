@@ -106,6 +106,9 @@ class Stream:
     def getDataProc(self):
         return self.data_proc
 
+    def getAudioConnection(self):
+        return self.audio_connection
+
     def getSummaryMessage(self):
         msg = f'[+] type {self.getStreamType()}: '
         if self.getControlPort() != 0:

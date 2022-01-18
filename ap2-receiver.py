@@ -433,7 +433,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     fr = plist["flushFromSeq"]
                 if "flushUntilSeq" in plist:
                     to = plist["flushUntilSeq"]
-                    self.server.streams[0].audio_connection.send(f"flush_from_until_seq-{fr}-{to}")
+                    for s in self.server.streams:
+                        s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
                 SCR_LOG.debug(self.pp.pformat(plist))
 
     def do_POST(self):
@@ -668,9 +669,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                     plist = readPlistFromString(body)
                     if plist["rate"] == 1:
-                        self.server.streams[0].audio_connection.send(f"play-{plist['rtpTime']}")
+                        for s in self.server.streams:
+                            s.getAudioConnection().send(f"play-{plist['rtpTime']}")
                     if plist["rate"] == 0:
-                        self.server.streams[0].audio_connection.send("pause")
+                        for s in self.server.streams:
+                            s.getAudioConnection().send("pause")
+
                     SCR_LOG.info(self.pp.pformat(plist))
             except IndexError:
                 # Fixes some disconnects
@@ -712,14 +716,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if(self.ntp_proc):
             self.ntp_proc.terminate()
 
-        # When changing from RTP_BUFFERED to REALTIME, must clean up:
-        for stream in self.server.streams:
-            stream.teardown()
-
         if len(self.server.streams) == 0:
             session = None
-
-        self.server.streams.clear()
 
     def do_SETPEERS(self):
         """
