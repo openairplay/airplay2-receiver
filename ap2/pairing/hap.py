@@ -143,8 +143,8 @@ class JSON_Store():
     @staticmethod
     def save_json(store, path: str):
         with open(path, mode="w", encoding="utf-8") as f:
-            logger = get_screen_logger(__name__, 'INFO')
-            logger.info(store)
+            # logger = get_screen_logger(__name__, 'INFO')
+            # logger.debug(store)
             json.dump(store, f)
 
     def __init__(self, path: str):
