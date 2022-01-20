@@ -162,6 +162,7 @@ def setup_global_structs(args, isDebug=False):
         # 'firmwareBuildDate': 'Nov  5 2019',
         # 'firmwareRevision': '53.3-71050',
         # 'hardwareRevision': '1.21.1.8-2',
+        # 'initialVolume': -144.0,
         'keepAliveLowPower': True,
         'keepAliveSendStatsAsBody': True,
         'manufacturer': 'OpenAirplay',
@@ -169,11 +170,20 @@ def setup_global_structs(args, isDebug=False):
         'name': DEV_NAME,
         'nameIsFactoryDefault': False,
         'pi': PI.decode(),  # UUID generated casually..
+        # 'psi': PI.decode(),  # ?
         'protocolVersion': '1.1',
         'sdk': 'AirPlay;2.0.2',
         'sourceVersion': SERVER_VERSION,
         'statusFlags': get_hex_bitmask(STATUS_FLAGS),
+        # 'supportedFormats': {
+        #     'lowLatencyAudioStream': 0,
+        #     # 'screenStream': 21235712,
+        #     'audioStream': 21235712,
+        #     'bufferStream': 14680064,
+        # },
         # 'statusFlags': 0x404 # Sonos One
+        # 'volumeControlType': 4,  # 1-4 all seem to behave the same.
+        # 'vv': 2,
     }
 
     if DISABLE_VM:
