@@ -62,7 +62,8 @@ SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
 HTTP_CT_OCTET = "application/octet-stream"
 HTTP_CT_PARAM = "text/parameters"
-HTTP_CT_IMAGE = "image/jpeg"
+HTTP_CT_IMAGE_JPEG = "image/jpeg"
+HTTP_CT_IMAGE = "image/"
 HTTP_CT_DMAP = "application/x-dmap-tagged"
 HTTP_CT_PAIR = "application/pairing+tlv8"
 """
@@ -627,13 +628,18 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     #     SCR_LOG.info(f"SET_PARAMETER: {pp[0]} => {pp[1]}")
                     # else:
                     #     SCR_LOG.info(f"Ops SET_PARAMETER: {p}")
-        elif content_type == HTTP_CT_IMAGE:
+
+        elif content_type.startswith(HTTP_CT_IMAGE):
             if content_len > 0:
+                body = self.rfile.read(content_len)
+
+                """
                 fname = None
                 with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False, suffix=".jpg") as f:
                     f.write(self.rfile.read(content_len))
                     fname = f.name
                 SCR_LOG.info(f"Artwork saved to {fname}")
+                """
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
                 SCR_LOG.info(parse_dxxp(self.rfile.read(content_len)))
