@@ -847,9 +847,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         if feedback:
-            stream_data = {'streams': []}
-            for s in self.server.streams:
-                stream_data['streams'].append(s.getDescriptor())
+            if len(self.server.streams) > 0:
+                stream_data = {'streams': []}
+                for s in self.server.streams:
+                    stream_data['streams'].append(s.getDescriptor())
+            else:
+                stream_data = {}
             # SCR_LOG.debug(stream_data)
             res = writePlistToString(stream_data)
             self.send_header("Content-Length", len(res))
