@@ -282,8 +282,8 @@ def setup_global_structs(args, isDebug=False):
 class AP2Handler(http.server.BaseHTTPRequestHandler):
     aeskeyobj = None
     pp = pprint.PrettyPrinter()
-    ntp_port, ptp_port = 0, 0
-    ntp_proc, ptp_proc = None, None
+    timing_port, ptp_port = 0, 0
+    timing_proc, ptp_proc = None, None
     fairplay_keymsg = None
     ecdh_shared_key = None
     session = None
@@ -728,8 +728,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
 
-        if(self.ntp_proc):
-            self.ntp_proc.terminate()
+        if(self.timing_proc):
+            self.timing_proc.terminate()
 
         if len(self.server.streams) == 0:
             session = None
