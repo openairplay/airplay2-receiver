@@ -37,6 +37,17 @@ Next steps:
  - FairPlay v2 Support
 ---
 
+## Multiple Connections
+
+Since multithreading is now enabled, this allows multiple concurrent connections. There are no safeguards 
+built to prevent you playing multiple streams. Python multiprocessing makes this "DJ" mode a 
+possibility but makes stream management and session management (global state data) nigh impossible. So 
+threading is the right approach in the receiver. 
+
+HomeKit and other AP senders can now connect concurrently to the receiver and perform operations. This
+opens the path to Remote Control functionality.
+
+
 ## mDNS/ZeroConf
 
 If you encounter strange errors like NonUniqueNameException, or Address already in use, 

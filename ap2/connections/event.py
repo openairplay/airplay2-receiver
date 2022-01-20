@@ -1,6 +1,7 @@
 import socket
 import multiprocessing
 import os
+import time
 
 from ..utils import get_file_logger, get_free_port
 
@@ -35,10 +36,14 @@ class EventGeneric:
                 event_file = open(self.file, "wb")
             try:
                 while True:
-                    data = conn.recv(1)
+                    data = conn.recv(1, socket.MSG_WAITALL)
                     if data:
                         event_file.write(data)
                         pass
+                    else:
+                        # This while loop can run away.
+                        break
+                        raise KeyboardInterrupt
             except KeyboardInterrupt:
                 pass
             finally:

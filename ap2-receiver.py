@@ -8,6 +8,8 @@ import argparse
 import tempfile
 import multiprocessing
 import random
+import threading
+from threading import current_thread
 
 import pprint
 
@@ -120,6 +122,7 @@ def get_hex_bitmask(in_features):
 
 
 def update_status_flags(flag=None, on=False, push=True):
+    global MDNS_OBJ
     """ Use this to check for and send out updated status flags
     if flag is None, skip changing the flags (e.g. updates already queued)
     if on is true, add the flag in, otherwise remove it.
@@ -307,6 +310,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     fairplay_keymsg = None
     ecdh_shared_key = None
     session = None
+    hap = None
 
     # Maps paths to methods a la HAP-python
     HANDLERS = {
@@ -336,7 +340,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         """ thread local logging """
         server_address = socket.getsockname()
         pair_string = f'{self.__class__.__name__}: {server_address[0]}:{server_address[1]}<=>{client_address[0]}:{client_address[1]}'
-
+        pair_string += f'; {current_thread().name}'
         level = 'DEBUG' if DEBUG else 'INFO'
         self.logger = get_screen_logger(pair_string, level=level)
         http.server.BaseHTTPRequestHandler.__init__(self, socket, client_address, server)
@@ -363,7 +367,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 404,
                 f": Method {self.command} Path {path} endpoint not implemented"
             )
-            self.server.hap = None
+            self.hap = None
 
     def parse_request(self):
         self.raw_requestline = self.raw_requestline.replace(b"RTSP/1.0", b"HTTP/1.1")
@@ -528,10 +532,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
             self.server.streams.append(streamobj)
 
-            event_port, self.event_proc = EventGeneric.spawn(
-                self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
-            timing_port, self.timing_proc = EventGeneric.spawn(
-                self.server.server_address, name='ntp', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
+            if not self.server.event_proc:
+                self.server.event_port, self.server.event_proc = EventGeneric.spawn(
+                    self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
+            if not self.server.timing_proc:
+                self.server.timing_port, self.server.timing_proc = EventGeneric.spawn(
+                    self.server.server_address, name='ntp', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
             transport = self.headers["Transport"].split(';')
             res = []
             res.append("RTP/AVP/UDP")
@@ -574,10 +580,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                 if "streams" not in plist:
                     self.logger.debug("Sending EVENT:")
-                    event_port, self.event_proc = EventGeneric.spawn(
+                    self.server.event_port, self.server.event_proc = EventGeneric.spawn(
                         self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
-                    device_setup["eventPort"] = event_port
-                    self.logger.debug(f"[+] eventPort={event_port}")
+                    device_setup["eventPort"] = self.server.event_port
+                    self.logger.debug(f"[+] eventPort={self.server.event_port}")
 
                     self.logger.debug(self.pp.pformat(device_setup))
                     res = writePlistToString(device_setup)
@@ -775,7 +781,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         self.server.streams[:] = [s for s in self.server.streams if not s.isCulled()]
                 self.logger.info(self.pp.pformat(plist))
                 if plist == {} and len(self.server.streams) == 0:
-                    self.event_proc.terminate()
+                    self.server.event_proc.terminate()
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -957,12 +963,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     def handle_pair_SV(self, op):
         body = self.rfile.read(int(self.headers["Content-Length"]))
 
-        if not self.server.hap:
-            self.server.hap = Hap(PI, DEBUG)
+        if not self.hap:
+            self.hap = Hap(PI, DEBUG)
         if op == 'verify':
-            res = self.server.hap.pair_verify(body)
+            res = self.hap.pair_verify(body)
         elif op == 'setup':
-            res = self.server.hap.pair_setup(body)
+            res = self.hap.pair_setup(body)
 
         self.send_response(200)
         self.send_header("Content-Length", len(res))
@@ -972,12 +978,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(res)
 
-        if self.server.hap.encrypted and self.server.hap.mfi_setup:
+        if self.hap.encrypted and self.hap.mfi_setup:
             self.logger.warning('MFi setup not yet possible. Disable feature bit 51.')
-        elif self.server.hap.encrypted:
-            hexdump(self.server.hap.accessory_shared_key) if DEBUG else ''
-            self.ecdh_shared_key = self.server.hap.accessory_shared_key
-            self.upgrade_to_encrypted(self.server.hap.accessory_shared_key)
+        elif self.hap.encrypted:
+            hexdump(self.hap.accessory_shared_key) if DEBUG else ''
+            self.ecdh_shared_key = self.hap.accessory_shared_key
+            self.upgrade_to_encrypted(self.hap.accessory_shared_key)
 
     def handle_pair_add(self):
         self.handle_pair_ARL('add')
@@ -995,11 +1001,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if content_len > 0:
             body = self.rfile.read(content_len)
             if op == 'add':
-                res = self.server.hap.pair_add(body)
+                res = self.hap.pair_add(body)
             elif op == 'remove':
-                res = self.server.hap.pair_remove(body)
+                res = self.hap.pair_remove(body)
             elif op == 'list':
-                res = self.server.hap.pair_list(body)
+                res = self.hap.pair_list(body)
             hexdump(res) if DEBUG else ''
             self.send_response(200)
             self.send_header("Content-Type", self.headers["Content-Type"])
@@ -1068,7 +1074,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 HK_PW = pw
                 DEV_PROPS.setDevicePassword(pw)
 
-        accessory_id, accessory_ltpk = self.server.hap.configure()
+        accessory_id, accessory_ltpk = self.hap.configure()
         configure_info = {
             'Identifier': accessory_id.decode('utf-8'),
             hkac_s: hkac,
@@ -1185,7 +1191,7 @@ def unregister_mdns(zeroconf, info):
         zeroconf.close()
 
 
-class AP2Server(socketserver.TCPServer):
+class AP2Server(socketserver.ThreadingTCPServer):
     # Fixes 99% of scenarios on restart after we terminate uncleanly/crash
     # and port was not closed before crash (is still open).
     # AP2 client connects from random port.
@@ -1195,24 +1201,46 @@ class AP2Server(socketserver.TCPServer):
     def __init__(self, addr_port, handler):
         super().__init__(addr_port, handler)
         self.connections = {}
-        self.hap = None
+        """ Handle the HAP object here: it's not a fact that the HAP
+        connection is torn down, when the sessions and streams are. This means
+        HomeKit, RemoteControl and other niceties continue to work.
+        """
+        self.serv_addr, self.serv_port = addr_port
+        # self.hap = None  # thread local, not global.
+        self.event_proc = None
+        self.event_port = None
+        self.timing_proc = None
+        self.timing_port = None
         self.enc_layer = False
         self.streams = []
+        self.sessions = []
+        log_string = f'{self.__class__.__name__}: {self.serv_addr}:{self.serv_port}'
+        level = 'DEBUG' if DEBUG else 'INFO'
+        self.logger = get_screen_logger(log_string, level=level)
 
     # Override
     def get_request(self):
-        # Quick clean-up in case anything from before is still around.
-        self.hap = None
         client_socket, client_addr = super().get_request()
-        SCR_LOG.info(f"Opened connection from {client_addr[0]}:{client_addr[1]}")
+        self.logger.info(f"Opened connection from {client_addr[0]}:{client_addr[1]}")
         self.connections[client_addr] = client_socket
         return (client_socket, client_addr)
 
     def upgrade_to_encrypted(self, client_address, shared_key):
         client_socket = self.connections[client_address]
-        hap_socket = HAPSocket(client_socket, shared_key)
-        self.connections[client_address] = hap_socket
-        return hap_socket
+        self.hap_socket = HAPSocket(client_socket, shared_key)
+        self.logger.info(f"{current_thread().name}: Opened HAPSocket from {client_address[0]}:{client_address[1]}")
+        self.connections[client_address] = self.hap_socket
+        return self.hap_socket
+
+    # Override
+    def server_close(self):
+        if self.logger:
+            self.logger.debug('Removing AP2Server object.')
+        self.hap = None
+        self.hap_socket = None
+        self.streams.clear()
+        self.logger = None
+        self.shutdown()
 
 
 def list_network_interfaces():
@@ -1393,15 +1421,15 @@ if __name__ == "__main__":
         PORT = 7000
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
-                SCR_LOG.info(f"serving at port {PORT}")
                 IPADDR_BIN = IP6ADDR_BIN
                 IPADDR = IPV6
+                SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
-                SCR_LOG.info(F"serving at port {PORT}")
                 IPADDR_BIN = IP4ADDR_BIN
                 IPADDR = IPV4
+                SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
 
     except KeyboardInterrupt:

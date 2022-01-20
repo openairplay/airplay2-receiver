@@ -80,6 +80,11 @@ logging.config.dictConfig({
             'level': 'DEBUG',
             'propagate': False,
         },
+        'Receiver*': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
         'RTPBuffer': {
             'handlers': ['console'],
             'level': 'DEBUG',
@@ -123,7 +128,7 @@ def get_file_logger(name, level="INFO"):
 def get_screen_logger(name, level="INFO"):
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    logger.propagate = False
+    # logger.propagate = False
     if level == 'DEBUG':
         print(f'[{name}] logging level: {level}')
     return logger
