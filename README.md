@@ -1,7 +1,8 @@
 # Experimental
 
-Very quick python implementation of AP2 protocol using **minimal
+Somewhat comprehensive python implementation of AP2 receiver using **some
 multi-room** features. For now it implements:
+
 - HomeKit transient pairing (SRP/Curve25519/ChaCha20-Poly1305) - bit flag 48
 - HomeKit non-transient pairing
 - Some refinements for HomeKit interaction (e.g. managed/active flags)
