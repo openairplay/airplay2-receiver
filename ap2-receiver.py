@@ -715,6 +715,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         stream.teardown()
                         del self.server.streams[stream_id]
                 SCR_LOG.info(self.pp.pformat(plist))
+                if plist == {} and len(self.server.streams) == 0:
+                    self.server.event_proc.terminate()
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -726,8 +728,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Erase the hap() instance, otherwise reconnects fail
         self.server.hap = None
 
-        # terminate the forked event_proc, otherwise a zombie process consumes 100% cpu
-        self.event_proc.terminate()
         if(self.ntp_proc):
             self.ntp_proc.terminate()
 
