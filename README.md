@@ -40,6 +40,13 @@ Next steps:
  - FairPlay v2 Support
 ---
 
+## mDNS/ZeroConf
+
+If you encounter strange errors like NonUniqueNameException, or Address already in use, 
+and you run on macOS, you may have noticed that macOS and this app both try to send updates. 
+[Here is a possible workaround](https://github.com/jstasiak/python-zeroconf/issues/967#issuecomment-949110570).
+
+
 ## Raspberry Pi 4
 
 Install docker and then build the image:

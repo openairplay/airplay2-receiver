@@ -12,6 +12,7 @@ import pprint
 
 import http.server
 import socketserver
+import asyncio
 
 import netifaces as ni
 from hexdump import hexdump
@@ -112,9 +113,9 @@ def update_status_flags(flag=None, on=False, push=True):
             STATUS_FLAGS ^= flag
         elif STATUS_FLAGS & flag and not on:
             STATUS_FLAGS ^= flag
-        # push out mDNS update
-        setup_global_structs(args, isDebug=DEBUG)
-    # If push is false, we skip the update.
+    # update the global info structures
+    setup_global_structs(args, isDebug=DEBUG)
+    # If push is false, we skip pushing out the update.
     if push:
         MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
 
@@ -1077,21 +1078,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
 
 def register_mdns(mac, receiver_name, addresses):
-    """
-    addresses = []
-    for ifen in ni.interfaces():
-        ifenaddr = ni.ifaddresses(ifen)
-        if ni.AF_INET in ifenaddr:
-            addresses.append(socket.inet_pton(
-                ni.AF_INET,
-                ifenaddr[ni.AF_INET][0]["addr"])
-            )
-        if ni.AF_INET6 in ifenaddr:
-            addresses.append(socket.inet_pton(
-                ni.AF_INET6,
-                ifenaddr[ni.AF_INET6][0]["addr"].split("%")[0])
-            )
-    """
+    global MDNS_OBJ
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
@@ -1105,12 +1092,14 @@ def register_mdns(mac, receiver_name, addresses):
     zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
 
     # Remove stale entries
-    if MDNS_OBJ:
-        unregister_mdns(MDNS_OBJ[0], MDNS_OBJ[1], remove=False)
-    # Push out new entries
+    # This step causes problems in multiprocess: needs asyncio
     try:
-        zeroconf.register_service(info)
-        SCR_LOG.info("mDNS: service registered")
+        if MDNS_OBJ:
+            zeroconf.update_service(info)
+        else:
+            # Push out new entries
+            zeroconf.register_service(info)
+            SCR_LOG.info("mDNS: service registered")
     except (NonUniqueNameException) as e:
         SCR_LOG.error(f'mDNS exception during registration: {repr(e)}')
     finally:
@@ -1118,23 +1107,15 @@ def register_mdns(mac, receiver_name, addresses):
     return (zeroconf, info)
 
 
-def unregister_mdns(zeroconf, info, remove=True):
-    """
-    If remove is true, close and remove the zeroconf instance also
-    Otherwise attempt to remove old entries
-    """
+def unregister_mdns(zeroconf, info):
     try:
-        zeroconf.unregister_service(info)
-        if remove:
-            SCR_LOG.info("mDNS: Unregistering")
-        else:
-            SCR_LOG.info("mDNS: Old entries removed")
+        asyncio.run(zeroconf.async_unregister_service(info))
+        SCR_LOG.info("mDNS: Unregistering")
     except (NonUniqueNameException) as e:
         # Observed NonUniqueNameException once during testing
         SCR_LOG.error(f'mDNS exception during removal: {repr(e)}')
     finally:
-        if remove:
-            zeroconf.close()
+        zeroconf.close()
 
 
 class AP2Server(socketserver.TCPServer):
