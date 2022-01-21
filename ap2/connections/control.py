@@ -28,6 +28,8 @@ class Control:
     def __init__(self, isDebug=False):
         self.isDebug = isDebug
         self.port = get_free_port()
+        level = 'DEBUG' if self.isDebug else 'INFO'
+        self.logger = get_file_logger("control", level=level)
 
     def handle(self, rtcp):
         if self.isDebug:
@@ -42,8 +44,6 @@ class Control:
 
     def serve(self):
         try:
-            if self.isDebug:
-                self.logger = get_file_logger("control", level="DEBUG")
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             addr = ("0.0.0.0", self.port)
             sock.bind(addr)
