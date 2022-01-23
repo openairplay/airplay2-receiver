@@ -143,17 +143,19 @@ def get_free_socket(addr=None, tcp=False):
     stype = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
     free_socket = None
 
-    if len(addr.split(".")) == 4:
-        free_socket = socket.socket(socket.AF_INET, stype)
-    else:
-        free_socket = socket.socket(socket.AF_INET6, stype)
-        v4 = False
     if addr:
+        if len(addr.split(".")) == 4:
+            free_socket = socket.socket(socket.AF_INET, stype)
+        else:
+            free_socket = socket.socket(socket.AF_INET6, stype)
+            v4 = False
         free_socket.bind((addr, 0))
     else:
         if v4:
+            free_socket = socket.socket(socket.AF_INET, stype)
             free_socket.bind(('0.0.0.0', 0))
         else:
+            free_socket = socket.socket(socket.AF_INET6, stype)
             free_socket.bind(('::', 0))
     if tcp:
         free_socket.listen(5)
