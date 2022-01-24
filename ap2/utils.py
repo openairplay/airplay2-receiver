@@ -55,9 +55,19 @@ logging.config.dictConfig({
             'level': 'DEBUG',
             'propagate': False,
         },
-        'Audio.Main': {
+        'Audio': {
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'AudioBuffered': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'AudioRealtime': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
             'propagate': False,
         },
         'control': {

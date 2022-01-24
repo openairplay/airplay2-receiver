@@ -337,11 +337,10 @@ class Audio:
     ):
         self.isDebug = isDebug
         self.addr = addr
-        if self.isDebug:
-            self.audio_file_logger = get_file_logger("Audio.debug", level="DEBUG")
-            self.audio_screen_logger = get_screen_logger("Audio.Main", level="DEBUG")
-        else:
-            self.audio_screen_logger = get_screen_logger("Audio.Main", level="INFO")
+        loglevel = 'DEBUG' if self.isDebug else 'INFO'
+        self.audio_file_logger = get_file_logger("Audio.debug", level="DEBUG")
+        self.audio_screen_logger = get_screen_logger(self.__class__.__name__, level=loglevel)
+
         self.audio_format = audio_format
         self.audio_params = aud_params
         self.spf = spf
@@ -689,11 +688,7 @@ class AudioBuffered(Audio):
             aud_params,
         )
         self.isDebug = isDebug
-        if self.isDebug:
-            self.ab_file_logger = get_file_logger("AudioBuffered", level="DEBUG")
-            self.ab_screen_logger = get_screen_logger("AudioBuffered", level='DEBUG')
-        else:
-            self.ab_screen_logger = get_screen_logger("AudioBuffered", level="INFO")
+
         self.socket = get_free_socket(addr, tcp=True)
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicNanosLocal = None  # local play start time in nanos
@@ -730,9 +725,9 @@ class AudioBuffered(Audio):
                 if message == "buffer_ready":
                     buffer_ready = True
                 elif message == "synced_response":
-                    self.ab_screen_logger.info("playback: align playhead response received")
+                    self.audio_screen_logger.info("playback: align playhead response received")
                     ts = self.samples_elapsed_since_anchor()
-                    self.ab_screen_logger.info(f"playback: forwarding to timestamp {ts}")
+                    self.audio_screen_logger.info(f"playback: forwarding to timestamp {ts}")
                     self.rtp_buffer.flush(ts)
                     synced = True
 
@@ -827,11 +822,11 @@ class AudioBuffered(Audio):
 
                         msg = f"server: searching sequence {flush_until} -"
                         msg += f" current is {rtp.sequence_no}"
-                        self.ab_screen_logger.debug(msg)
+                        self.audio_screen_logger.debug(msg)
                         # only admit data newer than our jump target
                         if rtp.sequence_no > flush_until:
                             if flush_from == 0:
-                                self.ab_screen_logger.debug("server: buffer init")
+                                self.audio_screen_logger.debug("server: buffer init")
                                 self.rtp_buffer.clear()
                             self.rtp_buffer.append(rtp)
                             flush_until = None
