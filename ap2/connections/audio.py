@@ -470,9 +470,9 @@ class Audio:
             except (KeyError, ValueError) as e:
                 self.audio_screen_logger.error(f'RTP AES MODE_CBC decrypt: {repr(e)}')
         else:
-            c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
-            c.update(rtp.aad)  # necessary at least for RTP type 103.
             try:
+                c = ChaCha20_Poly1305.new(key=self.session_key, nonce=rtp.nonce)
+                c.update(rtp.aad)  # necessary at least for RTP type 103.
                 data = c.decrypt_and_verify(rtp.payload, rtp.tag)
             except ValueError as e:
                 self.audio_screen_logger.error(f'RTP ChaCha20_Poly1305 decrypt: {repr(e)}')
