@@ -57,7 +57,15 @@ HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
 
-# SERVER_VERSION; presence/absence, and possibly value dictates some client behaviour
+"""
+# SERVER_VERSION; presence/absence, and value dictates client behaviours
+Set above 360 to trigger remote control
+Set to <= 355 to trigger REALTIME and NTP (as opposed to buffered streams)
+Set to >= 355 to trigger PTP and buffered.
+Set to <= 350 to prevent shk in streams.
+Set to 300 to trigger ??
+Set to 200 to trigger ANNOUNCE (APv1)
+"""
 SERVER_VERSION = "366.0"
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
 HTTP_CT_OCTET = "application/octet-stream"
