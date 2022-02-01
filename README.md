@@ -136,9 +136,8 @@ To run the receiver please use Python 3 and do the following:
 
 ```zsh
 cd [WHERE_YOU_CLONED_AIRPLAY2_RECEIVER]
-virtualenv airplay2-receiver
-cd airplay2-receiver
-.\Scripts\activate
+virtualenv ap2env
+.\ap2env\Scripts\activate
 pip install -r requirements.txt
 pip install pipwin pycaw
 pipwin install pyaudio
