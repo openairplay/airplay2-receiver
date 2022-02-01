@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📗 Spec Info
+    url: https://openairplay.github.io/airplay-spec/
+    about: The spec should help you understand the essentials of AirPlay(2)
+  - name: 📗 More Spec Info
+    url: https://emanuelecozzi.net/docs/airplay2/
+    about: More useful information on AirPlay

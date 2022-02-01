@@ -1,0 +1,103 @@
+name: Report an issue in English with Receiver
+description: Report an issue with Receiver.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue form is for reporting bugs only.
+
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: The problem
+      description: >-
+        Describe the issue you are experiencing here, to communicate to the
+        maintainers. Tell us what you were trying to do and what happened.
+
+        Provide a clear and concise description of what the problem is.
+  - type: markdown
+    attributes:
+      value: |
+        ## Environment
+  - type: input
+    id: version
+    validations:
+      required: true
+    attributes:
+      label: What commit exhibits the issue?
+      placeholder: 
+      description: >
+        Run `git rev-parse --short HEAD`
+  - type: input
+    attributes:
+      label: Was there a last known working commit?
+      placeholder: 
+      description: >
+        If known, otherwise leave blank.
+  - type: dropdown
+    validations:
+      required: true
+    attributes:
+      label: What type of installation are you running?
+      description: >
+        The installed environment.
+      options:
+        - Docker
+        - virtualenv
+        - direct (via `python3`)
+  - type: input
+    id: python_ver
+    attributes:
+      label: With which python3 version do you run Receiver?
+      description: >
+        Run `python3 -V`
+    validations:
+      required: true
+  - type: input
+    id: receiver_os
+    attributes:
+      label: OS the receiver runs on
+      placeholder: macOS
+      description: |
+          Windows, macOS, Ubuntu...
+    validations:
+      required: true
+  - type: input
+    id: sender_os
+    attributes:
+      label: OS the sender runs
+      placeholder: version...
+      description: |
+          macOS, iOS 14.8.1, etc
+    validations:
+      required: true
+  - type: input
+    id: sender_client
+    attributes:
+      label: Which sender client was used
+      placeholder: version...
+      description: |
+          YouTube, iOS Music app, Spotify, ...
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        # Details
+  - type: input
+    attributes:
+      label: Command invocation
+      description: |
+        How did you run the receiver? e.g. `python3 ap2-receiver.py -n en0 --debug` 
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Please include --debug output which helps to illustrate the problem
+      description: For example, error message, or stack traces. Run with `--debug`. Usually the stdout output is sufficient. We may ask for other log files produced if necessary. Please do not yet include them, unless you know that this is where the problem is rooted.
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: >
+        If you have any additional information for us, use the field below.
