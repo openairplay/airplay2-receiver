@@ -105,7 +105,7 @@ cd airplay2-receiver/
 pip3 install virtualenv
 virtualenv airplay2-receiver
 cd airplay2-receiver/
-pip3 install -r requirements.txt
+pip3 install -r ../requirements.txt
 pip3 install pyaudio
 ```
 
@@ -121,7 +121,7 @@ brew install python3
 brew install portaudio
 virtualenv -p /usr/local/bin/python3 proto
 source proto/bin/activate
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 pip install --global-option=build_ext --global-option="-I/usr/local/Cellar/portaudio/19.6.0/include" --global-option="-L/usr/local/Cellar/portaudio/19.6.0/lib" pyaudio
 
 
@@ -139,7 +139,7 @@ cd [WHERE_YOU_CLONED_AIRPLAY2_RECEIVER]
 virtualenv airplay2-receiver
 cd airplay2-receiver
 .\Scripts\activate
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 pip install pipwin pycaw
 pipwin install pyaudio
 
