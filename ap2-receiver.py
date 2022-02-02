@@ -470,6 +470,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if self.headers["Transport"]:
             # SCR_LOG.debug(self.headers["Transport"])
 
+            """ Run receiver with bit 13/14 and no bit 25, it's RSA in ANNOUNCE. Sender assumes you are an
+            airport with only 250msec buffer, so min/max are absent from SDP. FP2 is a solution. """
+
+            """ ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD. largely implied by audioFormat """
+
             # Set up a stream to receive.
             stream = {
                 'audioFormat': self.sdp.AirplayAudFmt,

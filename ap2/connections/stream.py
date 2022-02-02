@@ -44,6 +44,7 @@ class Stream:
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
             self.control_port, self.control_proc = Control.spawn(self.isDebug)
             self.audio_format = stream["audioFormat"]
+            """ ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD. largely implied by audioFormat """
             self.compression = stream["ct"]
             self.session_key = stream["shk"] if "shk" in stream else b"\x00" * 32
             self.frames_packet = stream["spf"]
@@ -52,6 +53,8 @@ class Stream:
         if self.streamtype == Stream.REALTIME:
             self.session_iv = stream["shiv"] if "shiv" in stream else None
             self.server_control = stream["controlPort"]
+            """ Run receiver with bit 13/14 and no bit 25, it's RSA in ANNOUNCE. Sender assumes you are an
+            airport with only 250msec buffer, so min/max are absent from SDP. Support FP2? """
             self.latency_min = stream["latencyMin"]
             self.latency_max = stream["latencyMax"]
             """ Define a small buffer size - enough to keep playback stable
