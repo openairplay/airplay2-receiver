@@ -731,7 +731,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                         del self.server.streams[stream_id]
                 SCR_LOG.info(self.pp.pformat(plist))
                 if plist == {} and len(self.server.streams) == 0:
-                    self.server.event_proc.terminate()
+                    self.event_proc.terminate()
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
