@@ -15,7 +15,7 @@ logging.config.dictConfig({
             'format': '[%(name)s]: %(message)s'
         },
         'file': {
-            'format': '%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
         },
     },
     'handlers': {
