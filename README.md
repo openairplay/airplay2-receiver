@@ -20,21 +20,18 @@ multi-room** features. For now it implements:
 
 For now it does not implement:
  - FairPlay v2
- - Accurate audio sync (PTP and/or NTP)
+ - Accurate audio sync (with help of PTP and/or NTP)
 
  It may never implement:
  - MFi Authentication (requires MFi hardware module)
  
-**This code is experimental. This receiver does not expect to be a real receiver but a toolbox for learning/debugging all airplay protocols and related pairing/authentication methods.**
+**This code is experimental, yet fully functional. It can act as a real receiver but does not implement all airplay protocols and related pairing/authentication methods.**
 
-Latest additions:
- - Implement RTP buffer (manage FLUSHBUFFERED) : play/pause/timeline/playlist
 
 Next steps:
  - PTP (Precision Time Protocol)
  - Remove all os specific code (Soft Volume management)
  - Sender (branch-sender) - Implementation
- - Implement RSA Authentication
  - Raspbian package
  - DACP/(+MRP?) Support
  - FairPlay v2 Support
