@@ -5,6 +5,7 @@ import random
 from .control import Control
 from .audio import AudioRealtime, AudioBuffered
 from .stream_connection import StreamConnection
+from ap2.utils import get_free_socket
 
 
 class Stream:
@@ -20,10 +21,10 @@ class Stream:
         self.audio_connection = None
         self.initialized = False
 
-        self.data_port = 0
+        self.data_socket = None
         self.data_proc = None
 
-        self.control_port = 0
+        self.control_socket = get_free_socket(self.addr)
         self.control_proc = None
 
         self.shared_key = shared_key
@@ -59,8 +60,15 @@ class Stream:
             for sc in stream["streamConnections"]:
                 self.streamConnections.append(StreamConnection(sc))
 
+        if self.streamtype == Stream.REALTIME:
+            self.data_socket = get_free_socket(self.addr)
+        elif self.streamtype == Stream.BUFFERED:
+            self.data_socket = get_free_socket(self.addr, tcp=True)
+
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
-            self.control_port, self.control_proc = Control.spawn(self.isDebug)
+            self.control_port, self.control_proc = Control.spawn(
+                isDebug=self.isDebug,
+            )
             self.audio_format = stream["audioFormat"]
             """ ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD. largely implied by audioFormat """
             self.compression = stream["ct"]
@@ -79,8 +87,8 @@ class Stream:
             (11025//352) ≈ 0.25 seconds. Not 'realtime', but prevents jitter well.
             """
             buffer = ((self.latency_min * 7) // self.spf) + 1
-            self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
-                self.addr,
+            self.data_proc, self.audio_connection = AudioRealtime.spawn(
+                self.data_socket,
                 self.session_key, self.session_iv,
                 self.audio_format, buffer,
                 self.spf,
@@ -90,16 +98,16 @@ class Stream:
             )
             self.descriptor = {
                 'type': self.streamtype,
-                'controlPort': self.control_port,
-                'dataPort': self.data_port,
+                'controlPort': self.getControlPort(),
+                'dataPort': self.getDataPort(),
                 'audioBufferSize': self.buff_size,
                 'streamID': self.streamID,
             }
         elif self.streamtype == Stream.BUFFERED:
             buffer = (buff_size // self.spf) + 1
             iv = None
-            self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(
-                self.addr,
+            self.data_proc, self.audio_connection = AudioBuffered.spawn(
+                self.data_socket,
                 self.session_key, iv,
                 self.audio_format, buffer,
                 self.spf,
@@ -109,8 +117,8 @@ class Stream:
             )
             self.descriptor = {
                 'type': self.streamtype,
-                'controlPort': self.control_port,
-                'dataPort': self.data_port,
+                'controlPort': self.getControlPort(),
+                'dataPort': self.getDataPort(),
                 # Reply with the passed buff size, not the calculated array size
                 'audioBufferSize': self.buff_size,
                 'streamID': self.streamID,
@@ -131,13 +139,13 @@ class Stream:
         return self.streamID
 
     def getControlPort(self):
-        return self.control_port
+        return self.control_socket.getsockname()[1] if self.control_socket else 0
 
     def getControlProc(self):
         return self.control_proc
 
     def getDataPort(self):
-        return self.data_port
+        return self.data_socket.getsockname()[1] if self.data_socket else 0
 
     def getDataProc(self):
         return self.data_proc

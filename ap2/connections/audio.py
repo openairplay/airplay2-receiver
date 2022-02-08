@@ -524,7 +524,7 @@ class Audio:
         audio_proc = multiprocessing.Process(target=audio.run, args=(rcvr_cmd_pipe,))
         audio_proc.start()
 
-        return audio.port, audio_proc, audio.command_chan
+        return audio_proc, audio.command_chan
 
 
 class AudioRealtime(Audio):
@@ -551,7 +551,7 @@ class AudioRealtime(Audio):
             aud_params
         )
         self.isDebug = isDebug
-        self.socket = get_free_socket(addr)
+        self.socket = get_free_socket() if not addr else addr
         self.port = self.socket.getsockname()[1]
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
         self.anchorRTPTimestamp = None
@@ -689,7 +689,7 @@ class AudioBuffered(Audio):
         )
         self.isDebug = isDebug
 
-        self.socket = get_free_socket(addr, tcp=True)
+        self.socket = get_free_socket(addr, tcp=True) if not addr else addr
         self.port = self.socket.getsockname()[1]
         self.anchorMonotonicNanosLocal = None  # local play start time in nanos
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)

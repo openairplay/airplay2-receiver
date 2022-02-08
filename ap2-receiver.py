@@ -543,10 +543,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             res.append("RTP/AVP/UDP")
             res.append("unicast")
             res.append("mode=record")
-            ctl_msg = f"control_port={streamobj.control_port}"
+            ctl_msg = f"control_port={streamobj.getControlPort()}"
             res.append(ctl_msg)
             self.logger.debug(ctl_msg)
-            data_msg = f"server_port={streamobj.data_port}"
+            data_msg = f"server_port={streamobj.getDataPort()}"
             res.append(data_msg)
             self.logger.debug(data_msg)
             ntp_msg = f"timing_port={self.server.timing_port}"
