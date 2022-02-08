@@ -7,6 +7,7 @@ import logging
 import argparse
 import tempfile
 import multiprocessing
+import random
 
 import pprint
 
@@ -1200,12 +1201,19 @@ def list_available_flags():
     print('[?] Choose named features via their numbers. E.g. for Ft07, write: 7')
 
 
+def generate_fake_mac():
+    fakemac = int(random.getrandbits(48)).to_bytes(length=6, byteorder='big').hex()
+    fm = ':'.join(map(str, [fakemac[i:i + 2] for i in range(0, len(fakemac), 2)]))
+    return fm
+
+
 if __name__ == "__main__":
 
     multiprocessing.set_start_method("spawn")
     parser = argparse.ArgumentParser(prog='AirPlay 2 receiver')
     mutexgroup = parser.add_mutually_exclusive_group()
 
+    parser.add_argument("-fm", "--fakemac", help="Generate and use a random MAC for ethernet address.", action='store_true')
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
@@ -1316,7 +1324,12 @@ if __name__ == "__main__":
     IPV4 = None
     IPV6 = None
     if ifen.get(ni.AF_LINK):
-        DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
+        if args.fakemac:
+            DEVICE_ID = generate_fake_mac()
+            while DEVICE_ID == ifen[ni.AF_LINK][0]["addr"]:
+                DEVICE_ID = generate_fake_mac()
+        else:
+            DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
         DEVICE_ID_BIN = int((DEVICE_ID).replace(":", ""), base=16).to_bytes(6, 'big')
     if ifen.get(ni.AF_INET):
         IPV4 = ifen[ni.AF_INET][0]["addr"]
