@@ -70,8 +70,8 @@ logging.config.dictConfig({
             'level': 'DEBUG',
             'propagate': False,
         },
-        'control': {
-            'handlers': ['controlfile'],
+        'Control*': {
+            'handlers': ['controlfile', 'console'],
             'level': 'DEBUG',
             'propagate': False,
         },

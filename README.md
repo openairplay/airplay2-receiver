@@ -16,6 +16,7 @@ multi-room** features. For now it implements:
 - Output latency compensation for sync with other Airplay receivers
 - ANNOUNCE and RSA AES for unbuffered streaming from iTunes/Windows
 - Spotify (via AirPlay2) and other live media streams with AES keys.
+- RTCP
 
 
 For now it does not implement:

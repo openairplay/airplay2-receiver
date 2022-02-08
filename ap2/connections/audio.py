@@ -332,6 +332,7 @@ class Audio:
             audio_format=None, buff_size=None,
             spf=1024,
             streamtype=0,
+            control_conns=None,
             isDebug=False,
             aud_params: AudioSetup = None,
     ):
@@ -347,9 +348,14 @@ class Audio:
         self.streamtype = streamtype
         self.session_key = session_key
         self.session_iv = session_iv
+        self.control_conns = control_conns
         sk_len = len(session_key)
         self.key_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
         self.set_audio_params(self, audio_format)
+
+        """ variables we get via RTCP from Control class """
+        self.senderRtpTimestamp, self.playAtRtpTimestamp = None, None
+        self.remoteClockMonotonic_ts, self.remoteClockId = None, None
 
     def init_audio_sink(self):
         codecLatencySec = 0
@@ -472,10 +478,15 @@ class Audio:
                 self.audio_screen_logger.error(repr(e))
                 pass
 
-    def run(self, rcvr_cmd_pipe):
+    def run(self, rcvr_cmd_pipe, control_conns):
         # This pipe is between player (read data) and server (write data)
         here, there = multiprocessing.Pipe()
-        server_thread = threading.Thread(target=self.serve, args=(there,))
+        if control_conns:
+            control_recv, control_send = control_conns
+        else:
+            control_recv, control_send = None, None
+
+        server_thread = threading.Thread(target=self.serve, args=(there, control_recv, control_send))
         player_thread = threading.Thread(target=self.play, args=(rcvr_cmd_pipe, here))
 
         server_thread.start()
@@ -507,6 +518,7 @@ class Audio:
             audio_format=0, buff_size=None,
             spf=1024,
             streamtype=0,
+            control_conns=None,
             isDebug=False,
             aud_params: AudioSetup = None,
     ):
@@ -516,12 +528,13 @@ class Audio:
             audio_format, buff_size,
             spf,
             streamtype,
+            control_conns,
             isDebug,
             aud_params,
         )
         # This pipe is reachable from receiver
         rcvr_cmd_pipe, audio.command_chan = multiprocessing.Pipe()
-        audio_proc = multiprocessing.Process(target=audio.run, args=(rcvr_cmd_pipe,))
+        audio_proc = multiprocessing.Process(target=audio.run, args=(rcvr_cmd_pipe, control_conns))
         audio_proc.start()
 
         return audio_proc, audio.command_chan
@@ -538,6 +551,7 @@ class AudioRealtime(Audio):
             audio_format, buff_size,
             spf,
             streamtype,
+            control_conns=None,
             isDebug=False,
             aud_params: AudioSetup = None
     ):
@@ -547,6 +561,7 @@ class AudioRealtime(Audio):
             audio_format, buff_size,
             spf,
             streamtype,
+            control_conns,
             isDebug,
             aud_params
         )
@@ -560,8 +575,28 @@ class AudioRealtime(Audio):
         self.sink.close()
         self.pa.terminate()
 
-    def serve(self, serverconn):
+    def serve(self, serverconn, control_recv, control_send):
         while True:
+            if control_recv:
+                rtsp = control_recv.get()
+                if rtsp:
+                    # update local variables
+                    self.senderRtpTimestamp, self.playAtRtpTimestamp = rtsp.getRtpTimesAtSender()
+                    """
+                    self.audio_screen_logger.debug((
+                        f'audio got senderRtpTimestamp:{self.senderRtpTimestamp}'
+                        f'; playAtRtpTimestamp:{self.playAtRtpTimestamp}'
+                    ))
+                    """
+                    # If remoteClockId is None, we're in NTP mode
+                    self.remoteClockMonotonic_ts, self.remoteClockId = rtsp.getClockAtSender()
+                    """
+                    self.audio_screen_logger.debug((
+                        f'audio got remoteMonotonic:{self.remoteClockMonotonic_ts}'
+                        f'; remoteClockId:{self.remoteClockId}'
+                    ))
+                    """
+
             if self.rtp_buffer.gaps_exist():
                 for missing_seq in self.rtp_buffer.missing_sequence_nos():
                     # Each missing_seq is a tuple: (Seq#, amount_following)
@@ -572,7 +607,7 @@ class AudioRealtime(Audio):
                     """ syntax:
                     resend_{missing_seq_no_start}/{amount_following}/{optional_timestamp}
                     """
-                    break
+                    control_send.put(f'resend_{missing_seq[0]}/{missing_seq[1]}/{0}')
 
             # Wake every ~fifth packet
             time.sleep((self.spf / self.sample_rate) * 5)
@@ -675,6 +710,7 @@ class AudioBuffered(Audio):
             audio_format=None, buff_size=None,
             spf=1024,
             streamtype=0,
+            control_conns=None,
             isDebug=False,
             aud_params: AudioSetup = None
     ):
@@ -684,6 +720,7 @@ class AudioBuffered(Audio):
             audio_format, buff_size,
             spf,
             streamtype,
+            control_conns,
             isDebug,
             aud_params,
         )
@@ -691,6 +728,8 @@ class AudioBuffered(Audio):
 
         self.socket = get_free_socket(addr, tcp=True) if not addr else addr
         self.port = self.socket.getsockname()[1]
+        self.control_conns = control_conns
+
         self.anchorMonotonicNanosLocal = None  # local play start time in nanos
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
         # RTP timestamp of where the play start anchor is
@@ -784,7 +823,7 @@ class AudioBuffered(Audio):
                     i += 1
 
     # server fills the buffer, and admits packets within desired timestamp ranges.
-    def serve(self, playerconn):
+    def serve(self, playerconn, control_recv, control_send):
         self.init_audio_sink()
 
         conn, addr = self.socket.accept()
