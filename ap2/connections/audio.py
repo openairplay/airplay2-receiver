@@ -14,6 +14,8 @@ from Crypto.Cipher import AES
 from av.audio.format import AudioFormat
 from collections import deque
 from operator import attrgetter
+from operator import add
+from functools import reduce
 
 
 from ..utils import get_file_logger, get_screen_logger, get_free_socket
@@ -41,6 +43,96 @@ class RTP_REALTIME(RTP):
         self.payload_type = data[1] & 0b01111111
         self.marker = (data[1] & 0b10000000) >> 7
         self.sequence_no = int.from_bytes(data[2:4], byteorder='big')
+        self.hasredundancy = False
+        """ Welcome to airplay redundancy. 0 to 7 blocks/frames opportunistically
+        prepend the current audio frame, together forming the (encrypted) payload,
+        when space comprising the difference between packet MTU and current audio
+        frame is available. Redundancy is extra copies of earlier audio frames.
+
+        Passages with low dynamic range i.e. quieter passages which losslessly
+        compress better get more redundancy, up to an observed max of 8 blocks
+        (7 redundant previous frames, plus 1 current, in this order).
+        Passages with high dynamic range, get less to none. This assumes ALAC.
+        Activate feature bit 61 for the sender to use redundancy.
+        This works with or without buffered audio (bit 40+41).
+        """
+        """ header block from RFC2198 with ordinal bits:
+                           1                   2                   3
+         1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |F|block PT 7bit|  timestamp offset 14bits  |block length 10bits|
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        F (1 bit): First bit. 1 indicates whether another header block
+           follows. 0 if this is the last header block.
+
+        block PT (7 bits): RTP payload type for this corresponding block.
+
+        if F is 1:
+        timestamp (TS) offset (14 bits): Unsigned offset of this block TS
+           relative to pkt header TS. Unsigned means redundant data must
+           be sent after the primary data, ∴ subtracted from current TS
+           to determine the data TS for which this block is the redundancy.
+
+        block length (10 bits): byte length of the corresponding data
+           block excluding header.
+
+        if F is 0: payload commences after block PT.
+        Ex RTP:
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |V=2|P|X| CC=0  |M|      PT     |   sequence number of primary  |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |              timestamp  of primary encoding                   |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |           synchronization source (SSRC) identifier            |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        Then for example:
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |0|    0x60 / 96| payload (current, not to scale)               |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        or:
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|   352  (1 pkt ago, r-1)   |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |0|    0x60 / 96| payload (r-1 + current, not to scale)         |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        or:
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|   352  (1 pkt ago, r-1)   |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|   704  (2 pkts ago r-2)   |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|  1056  (3 pkts ago, r-3)  |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|  ....  (X pkts ago, r-X)  |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |1|    0x60 / 96|  2464  (7 pkts ago, r-7)  |           size    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |0|    0x60 / 96| payload (r-1 + r-2 + r-3 + r-X + .. + current)|
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        """
+        if self.payload_type == 97:
+            self.block_list = []
+            fbit = 1
+            i = 0
+            while fbit:
+                extra_hdr = data[12 + (i * 4):16 + (i * 4)]
+                fbit = extra_hdr[0] & 0b10000000
+                block_pt = extra_hdr[0] & 0x7F
+                if fbit:
+                    self.hasredundancy = True
+                    ts_offset = (int.from_bytes(extra_hdr[1:3], byteorder='big') & 0x3FFC) >> 2
+                    block_length = int.from_bytes(extra_hdr[2:4], byteorder='big') & 0x3FF
+                    self.block_list.append((block_pt, ts_offset, block_length))
+                    # ts_offset increment is spf, e.g. 352
+                else:
+                    # Can be zero headers, but 1 F+PT byte
+                    self.payload = data[12 + (i * 4) + 1:-24]
+                    break
+                i += 1
 
 
 class RTP_BUFFERED(RTP):
@@ -468,6 +560,10 @@ class Audio:
 
     def process(self, rtp):
         data = self.decrypt(rtp)
+        if isinstance(rtp, RTP_REALTIME) and rtp.hasredundancy:
+            # rtp.payloads tuple: type, ts_offset (samples ago), length
+            # Set data to start at last block (add all lengths), skip redundancy for now.
+            data = data[reduce(add, [row[-1] for row in rtp.block_list]):]
         packet = av.packet.Packet(data)
         if(len(data) > 0):
             try:

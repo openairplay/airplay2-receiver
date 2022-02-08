@@ -17,6 +17,7 @@ multi-room** features. For now it implements:
 - ANNOUNCE and RSA AES for unbuffered streaming from iTunes/Windows
 - Spotify (via AirPlay2) and other live media streams with AES keys.
 - RTCP
+- RFC2198 RTP Redundancy handling (basic); enable bit flag 61
 
 
 For now it does not implement:
