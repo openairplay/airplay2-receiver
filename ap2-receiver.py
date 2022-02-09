@@ -246,13 +246,13 @@ def setup_global_structs(args, isDebug=False):
         "gid": "5dccfd20-b166-49cc-a593-6abd5f724ddb",
         # isGroupLeader: See gcgl
         # "isGroupLeader": "0",
-        # "manufacturer": "Pino",
+        "manufacturer": "OpenAirplay",
         "model": "Airplay2-Receiver",
         "name": DEV_NAME,
         "protovers": "1.1",
         # Required Sender Features (bitmask)
         "rsf": "0x0",
-        # "serialNumber": "01234xX321",
+        "serialNumber": DEVICE_ID,
         # Source Version (airplay SDK?): absence triggers AP1 ANNOUNCE behaviour.
         "srcvers": SERVER_VERSION,
 
