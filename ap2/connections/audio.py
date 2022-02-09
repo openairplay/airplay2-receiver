@@ -630,12 +630,12 @@ class AudioRealtime(Audio):
                                     print(f'excessive audio write times:{p_write:3.3} msec')
                                 print(f'd{self.msec_to_playout(rtp.timestamp):4}; pw:{p_write:3.3} ; combo;{delay:3.3}', end='\r', flush=False)
                                 """
-                                '''
+                                ''' # comment this out to enable relative sync
                                 if delay < ((2 * -one_pkt)):
                                     """ What to do here depends on the receiver performance. 'continue' too often can sound crunchy.
                                     dont skip frames and the playout lags behind. This is an unbuffered approach. WiFi also affects. """
                                     continue
-                                '''
+                                '''  # comment this out to enable relative sync
                                 if delay - 2 > 3:
                                     time.sleep((delay - 2) * 1e-3)
 
