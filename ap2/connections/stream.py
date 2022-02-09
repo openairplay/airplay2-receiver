@@ -9,11 +9,6 @@ from .stream_connection import StreamConnection
 
 class Stream:
 
-    # TIMING_REQUEST = 82
-    # TIMING_REPLY = 83
-    # TIME_SYNC = 84
-    # RETRANSMIT_REQUEST = 85
-    # RETRANSMIT_REPLY = 86
     REALTIME = 96
     BUFFERED = 103
 
