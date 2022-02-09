@@ -54,17 +54,24 @@ class Stream:
         self.streamConnectionID = stream["streamConnectionID"] if "streamConnectionID" in stream else None
         # A boolean:
         self.supportsDynamicStreamID = stream["supportsDynamicStreamID"] if "supportsDynamicStreamID" in stream else None
-        # bit 59 is enabled:
-        # Array
-        if 'streamConnections' in stream:
-            self.streamConnections = []
-            for sc in stream["streamConnections"]:
-                self.streamConnections.append(StreamConnection(sc))
 
         if self.streamtype == Stream.REALTIME:
             self.data_socket = get_free_socket(self.addr)
         elif self.streamtype == Stream.BUFFERED:
             self.data_socket = get_free_socket(self.addr, tcp=True)
+
+        self.has_scs = False
+        if 'streamConnections' in stream:
+            self.has_scs = True
+            self.streamConnections = StreamConnection(
+                stream,
+                # selfaddr=self.addr,
+                # selfmac=self.mac,
+                rtcpP=self.getControlPort(),
+                rtpP=self.getDataPort(),
+                # mdcP=self.getMRCPort(),
+                isDebug=self.isDebug,
+            )
 
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
             self.control_proc, self.control_conns = Control.spawn(
@@ -81,7 +88,7 @@ class Stream:
 
         if self.streamtype == Stream.REALTIME:
             self.session_iv = stream["shiv"] if "shiv" in stream else None
-            self.server_control = stream["controlPort"]
+            self.server_control = stream["controlPort"] if "controlPort" in stream else None
             """ Run receiver with bit 13/14 and no bit 25, it's RSA in ANNOUNCE. Sender assumes you are an
             airport with only 250msec buffer, so min/max are absent from SDP. Support FP2? """
             self.latency_min = stream["latencyMin"]
@@ -107,6 +114,9 @@ class Stream:
                 'audioBufferSize': self.buff_size,
                 'streamID': self.streamID,
             }
+            if self.has_scs:
+                self.descriptor['streamConnections'] = self.streamConnections.getSCs()
+
         elif self.streamtype == Stream.BUFFERED:
             buffer = (buff_size // self.spf) + 1
             iv = None
@@ -128,6 +138,8 @@ class Stream:
                 'audioBufferSize': self.buff_size,
                 'streamID': self.streamID,
             }
+            if self.has_scs:
+                self.descriptor['streamConnections'] = self.streamConnections.getSCs()
 
         self.initialized = True
 

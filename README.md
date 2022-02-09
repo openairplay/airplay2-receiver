@@ -18,6 +18,8 @@ multi-room** features. For now it implements:
 - Spotify (via AirPlay2) and other live media streams with AES keys.
 - RTCP
 - RFC2198 RTP Redundancy handling (basic); enable bit flag 61
+- streamConnections; enable bit flag 59
+
 
 
 For now it does not implement:
