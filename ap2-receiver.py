@@ -475,9 +475,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     fr = plist["flushFromSeq"]
                 if "flushUntilSeq" in plist:
                     to = plist["flushUntilSeq"]
-                    for s in self.server.streams:
-                        if s.isAudio() and s.isInitialized():
-                            s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
+                    try:
+                        for s in self.server.streams:
+                            if s.isAudio() and s.isInitialized():
+                                s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
+                    except OSError as e:
+                        self.logger.error(f'FLUSHBUFFERED error: {repr(e)}')
+                        pass
+
                 self.logger.debug(self.pp.pformat(plist))
 
     def do_POST(self):
@@ -563,7 +568,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 plist = readPlistFromString(body)
                 self.logger.debug(self.pp.pformat(plist))
 
-                session = Session(plist, self.fairplay_keymsg)
+                if not self.session:
+                    """ Only set up session first time at connection """
+                    self.session = Session(plist, self.fairplay_keymsg)
 
                 if "streams" not in plist:
                     self.logger.debug("Sending EVENT:")
@@ -725,14 +732,17 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     body = self.rfile.read(content_len)
 
                     plist = readPlistFromString(body)
-                    if plist["rate"] == 1:
-                        for s in self.server.streams:
-                            if s.isAudio() and s.isInitialized():
-                                s.getAudioConnection().send(f"play-{plist['rtpTime']}")
-                    if plist["rate"] == 0:
-                        for s in self.server.streams:
-                            if s.isAudio() and s.isInitialized():
-                                s.getAudioConnection().send("pause")
+                    try:  # Sending thru a pipe, check for pipe related errors
+                        if plist["rate"] == 1:
+                            for s in self.server.streams:
+                                if s.isAudio() and s.isInitialized():
+                                    s.getAudioConnection().send(f"play-{plist['rtpTime']}")
+                        if plist["rate"] == 0:
+                            for s in self.server.streams:
+                                if s.isAudio() and s.isInitialized():
+                                    s.getAudioConnection().send("pause")
+                    except OSError:
+                        self.logger.error(f'SETRATEANCHORTIME error: {repr(e)}')
 
                     self.logger.info(self.pp.pformat(plist))
             except IndexError:
@@ -773,15 +783,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
         # Send flag that we're no longer active
         update_status_flags(StatusFlags.getRecvSessActive(StatusFlags))
-
-        # Erase the hap() instance, otherwise reconnects fail
-        self.server.hap = None
-
-        if(self.timing_proc):
-            self.timing_proc.terminate()
-
-        if len(self.server.streams) == 0:
-            session = None
 
     def do_SETPEERS(self):
         """
