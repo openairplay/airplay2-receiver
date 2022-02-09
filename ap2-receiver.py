@@ -510,8 +510,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             # Set up a stream to receive.
             stream = {
                 'audioFormat': self.sdp.AirplayAudFmt,
-                'latencyMin': int(self.sdp.minlatency),
-                'latencyMax': int(self.sdp.maxlatency),
+                'latencyMin': int(self.sdp.audio_format_sr) // 4 if not self.sdp.minlatency else int(self.sdp.minlatency),
+                'latencyMax': int(self.sdp.audio_format_sr) * 2 if not self.sdp.maxlatency else int(self.sdp.maxlatency),
                 'ct': 0,  # Compression Type(?)
                 'shk': self.aeskeyobj.aeskey,
                 'shiv': self.aeskeyobj.aesiv,
@@ -685,10 +685,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                             set_volume(float(pp[1]))
                         else:
                             self.logger.warning("Volume Management is disabled")
-                    # elif pp[0] == b"progress":
+                    elif pp[0] == b"progress":
                         # startTimeStamp, currentTimeStamp, stopTimeStamp
-                        # self.logger.info(pp[1].decode('utf8').lstrip(' ').split('/'))
-                    #     self.logger.info(f"SET_PARAMETER: {pp[0]} => {pp[1]}")
+                        try:
+                            for s in self.server.streams:
+                                s.getAudioConnection().send(f"progress-{pp[1].decode('utf8').lstrip(' ')}")
+                        except OSError as e:
+                            self.logger.error(f'SET_PARAMETER error: {repr(e)}')
+
+                        self.logger.info(f"SET_PARAMETER: {pp[0]} => {pp[1]}")
                     # else:
                     #     self.logger.info(f"Ops SET_PARAMETER: {p}")
 
@@ -847,6 +852,18 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
     def do_FLUSH(self):
         self.logger.info(f'{self.command}: {self.path}')
         self.logger.debug(self.headers)
+
+        if "RTP-Info" in self.headers:
+            rtp_info = self.headers["RTP-Info"]
+            seq, rtptime = rtp_info.split(';')
+            seq = seq.split('=')[1]
+            rtptime = rtptime.split('=')[1]
+            try:
+                for s in self.server.streams:
+                    s.getAudioConnection().send(f"flush_seq_rtptime-{seq}-{rtptime}")
+            except OSError as e:
+                self.logger.error(f'FLUSH error: {repr(e)}')
+
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])

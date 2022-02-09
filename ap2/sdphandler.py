@@ -25,8 +25,8 @@ class SDPHandler():
         self.has_audio = False
         self.has_video = False
         self.audio_format = self.SDPAudioFormat.UNSUPPORTED
-        self.minlatency = 11025
-        self.maxlatency = 11025
+        self.minlatency = 0
+        self.maxlatency = 0
         self.spf = 0
         for k in self.sdp:
             if 'v=' in k:
