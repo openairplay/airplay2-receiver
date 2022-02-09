@@ -38,6 +38,7 @@ STATUS_FLAGS = StatusFlags.GetDefaultStatusFlags(StatusFlags)
 # PI = Public ID (can be GUID, MAC, some string).
 #  Note: BINARY. HAP classes expect binary format. Must be in text in device_info.
 PI = b'aa5cb8df-7f14-4249-901a-5e748ce57a93'
+STREAM_ID = 0
 DEBUG = False
 
 # The device MAC - string form.
@@ -95,6 +96,14 @@ HTTP_X_A_ET = "X-Apple-ET"
 
 #
 AIRPLAY_BUFFER = 8388608  # 0x800000 i.e. 1024 * 8192 - how many CODEC frame size 1024 we can hold
+
+
+def increase_stream_id():
+    global STREAM_ID
+    STREAM_ID += 1
+    # ID shall not exceed 32 bits.
+    STREAM_ID &= 0xFFFFFFFF
+    return STREAM_ID
 
 
 def get_hex_bitmask(in_features):
@@ -493,6 +502,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 stream,
                 IPADDR,
                 buff_size=AIRPLAY_BUFFER,
+                stream_id=increase_stream_id(),
                 isDebug=DEBUG,
                 aud_params=self.aud_params
             )
@@ -564,6 +574,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                             stream,
                             IPADDR,
                             buff_size=AIRPLAY_BUFFER,
+                            stream_id=increase_stream_id(),
                             isDebug=DEBUG,
                         )
                         SCR_LOG.debug("Building stream channels:")
@@ -727,9 +738,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 if "streams" in plist:
                     for s in plist["streams"]:
                         stream_id = s["streamID"]
-                        stream = self.server.streams[stream_id]
-                        stream.teardown()
-                        del self.server.streams[stream_id]
+                        stream_type = s["type"]
+
+                        if len(self.server.streams) > 0:
+                            for st in self.server.streams:
+                                if stream_type == st.getStreamType() and stream_id == st.getStreamID():
+                                    st.teardown()
+                        # Stream cull: build new list of non culled streams
+                        self.server.streams[:] = [s for s in self.server.streams if not s.isCulled()]
                 SCR_LOG.info(self.pp.pformat(plist))
                 if plist == {} and len(self.server.streams) == 0:
                     self.event_proc.terminate()

@@ -1,4 +1,6 @@
 import multiprocessing
+import random
+
 
 from .control import Control
 from .audio import AudioRealtime, AudioBuffered
@@ -15,7 +17,7 @@ class Stream:
     REALTIME = 96
     BUFFERED = 103
 
-    def __init__(self, stream, addr, port=0, buff_size=0, isDebug=False, aud_params=None):
+    def __init__(self, stream, addr, port=0, buff_size=0, stream_id=None, isDebug=False, aud_params=None):
         # self.audioMode = stream["audioMode"] # default|moviePlayback
         self.isDebug = isDebug
         self.addr = addr
@@ -23,11 +25,27 @@ class Stream:
         self.data_port = 0
 
         self.control_port = 0
+
+
+        self.culled = False
         """stat fields at teardown
         ccCountAPSender
         ccCountNonAPSender
         ccCountSender
         """
+
+        """ Senders handle a stream with an ID up to 32 bits long.
+        You get overflowed values back if you try with 64 bits. The sender
+        gives us streamID for teardown. Receiver provides the sender with a
+        list of active streams at every POST /feedback. Possibly also POST /info.
+        A monotonically increasing counter precludes collisions/repeats,
+        although having a random # as plan B is OK.
+        """
+        if stream_id:
+            self.streamID = stream_id
+        else:
+            self.streamID = random.getrandbits(32)
+
         # type should always be present
         self.streamtype = stream["type"]
         # A uint64:
@@ -74,6 +92,7 @@ class Stream:
                 'controlPort': self.control_port,
                 'dataPort': self.data_port,
                 'audioBufferSize': self.buff_size,
+                'streamID': self.streamID,
             }
         elif self.streamtype == Stream.BUFFERED:
             buffer = buff_size // self.frames_packet
@@ -92,10 +111,14 @@ class Stream:
                 'dataPort': self.data_port,
                 # Reply with the passed buff size, not the calculated array size
                 'audioBufferSize': self.buff_size,
+                'streamID': self.streamID,
             }
 
     def getStreamType(self):
         return self.streamtype
+
+    def getStreamID(self):
+        return self.streamID
 
     def getControlPort(self):
         return self.control_port
@@ -123,7 +146,12 @@ class Stream:
     def getDescriptor(self):
         return self.descriptor
 
+    def isCulled(self):
+        return self.culled
+
     def teardown(self):
+        self.culled = True
+
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
             self.control_proc.terminate()
             self.control_proc.join()
