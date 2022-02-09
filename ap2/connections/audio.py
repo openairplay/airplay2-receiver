@@ -358,6 +358,7 @@ class Audio:
             addr,
             session_key, session_iv=None,
             audio_format=None, buff_size=None,
+            spf=1024,
             streamtype=0,
             isDebug=False,
             aud_params: AudioSetup = None,
@@ -371,6 +372,8 @@ class Audio:
             self.audio_screen_logger = get_screen_logger("Audio.Main", level="INFO")
         self.audio_format = audio_format
         self.audio_params = aud_params
+        self.spf = spf
+        self.streamtype = streamtype
         self.session_key = session_key
         self.session_iv = session_iv
         sk_len = len(session_key)
@@ -513,6 +516,7 @@ class Audio:
             addr,
             session_key, iv=None,
             audio_format=0, buff_size=None,
+            spf=1024,
             streamtype=0,
             isDebug=False,
             aud_params: AudioSetup = None,
@@ -521,6 +525,7 @@ class Audio:
             addr,
             session_key, iv,
             audio_format, buff_size,
+            spf,
             streamtype,
             isDebug,
             aud_params,
@@ -543,6 +548,7 @@ class AudioRealtime(Audio):
             addr,
             session_key, iv,
             audio_format, buff_size,
+            spf,
             streamtype,
             isDebug=False,
             aud_params: AudioSetup = None
@@ -551,6 +557,7 @@ class AudioRealtime(Audio):
             addr,
             session_key, iv,
             audio_format, buff_size,
+            spf,
             streamtype,
             isDebug,
             aud_params
@@ -618,6 +625,7 @@ class AudioBuffered(Audio):
             addr,
             session_key, iv=None,
             audio_format=None, buff_size=None,
+            spf=1024,
             streamtype=0,
             isDebug=False,
             aud_params: AudioSetup = None
@@ -626,6 +634,7 @@ class AudioBuffered(Audio):
             addr,
             session_key, iv,
             audio_format, buff_size,
+            spf,
             streamtype,
             isDebug,
             aud_params,

@@ -476,7 +476,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 if "flushUntilSeq" in plist:
                     to = plist["flushUntilSeq"]
                     for s in self.server.streams:
-                        s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
+                        if s.isAudio() and s.isInitialized():
+                            s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
                 self.logger.debug(self.pp.pformat(plist))
 
     def do_POST(self):
@@ -515,6 +516,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 IPADDR,
                 buff_size=AIRPLAY_BUFFER,
                 stream_id=increase_stream_id(),
+                shared_key=self.ecdh_shared_key,
                 isDebug=DEBUG,
                 aud_params=self.aud_params
             )
@@ -522,9 +524,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.server.streams.append(streamobj)
 
             event_port, self.event_proc = EventGeneric.spawn(
-                self.server.server_address, name='events', isDebug=DEBUG)
+                self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
             timing_port, self.timing_proc = EventGeneric.spawn(
-                self.server.server_address, name='ntp', isDebug=DEBUG)
+                self.server.server_address, name='ntp', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
             transport = self.headers["Transport"].split(';')
             res = []
             res.append("RTP/AVP/UDP")
@@ -566,7 +568,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 if "streams" not in plist:
                     self.logger.debug("Sending EVENT:")
                     event_port, self.event_proc = EventGeneric.spawn(
-                        self.server.server_address, name='events', isDebug=DEBUG)
+                        self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
                     device_setup["eventPort"] = event_port
                     self.logger.debug(f"[+] eventPort={event_port}")
 
@@ -587,6 +589,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                             IPADDR,
                             buff_size=AIRPLAY_BUFFER,
                             stream_id=increase_stream_id(),
+                            shared_key=self.ecdh_shared_key,
                             isDebug=DEBUG,
                         )
                         self.logger.debug("Building stream channels:")
@@ -724,10 +727,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                     plist = readPlistFromString(body)
                     if plist["rate"] == 1:
                         for s in self.server.streams:
-                            s.getAudioConnection().send(f"play-{plist['rtpTime']}")
+                            if s.isAudio() and s.isInitialized():
+                                s.getAudioConnection().send(f"play-{plist['rtpTime']}")
                     if plist["rate"] == 0:
                         for s in self.server.streams:
-                            s.getAudioConnection().send("pause")
+                            if s.isAudio() and s.isInitialized():
+                                s.getAudioConnection().send("pause")
 
                     self.logger.info(self.pp.pformat(plist))
             except IndexError:

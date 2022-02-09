@@ -12,16 +12,21 @@ class Stream:
     REALTIME = 96
     BUFFERED = 103
 
-    def __init__(self, stream, addr, port=0, buff_size=0, stream_id=None, isDebug=False, aud_params=None):
+    def __init__(self, stream, addr, port=0, buff_size=0, stream_id=None, shared_key=None, isDebug=False, aud_params=None):
         # self.audioMode = stream["audioMode"] # default|moviePlayback
         self.isDebug = isDebug
         self.addr = addr
         self.port = port
+        self.audio_connection = None
+        self.initialized = False
+
         self.data_port = 0
+        self.data_proc = None
 
         self.control_port = 0
+        self.control_proc = None
 
-
+        self.shared_key = shared_key
         self.culled = False
         """stat fields at teardown
         ccCountAPSender
@@ -60,7 +65,7 @@ class Stream:
             """ ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD. largely implied by audioFormat """
             self.compression = stream["ct"]
             self.session_key = stream["shk"] if "shk" in stream else b"\x00" * 32
-            self.frames_packet = stream["spf"]
+            self.spf = stream["spf"]
             self.buff_size = buff_size
 
         if self.streamtype == Stream.REALTIME:
@@ -73,11 +78,12 @@ class Stream:
             """ Define a small buffer size - enough to keep playback stable
             (11025//352) ≈ 0.25 seconds. Not 'realtime', but prevents jitter well.
             """
-            buffer = (self.latency_max // self.frames_packet)
+            buffer = (self.latency_max // self.spf) + 1
             self.data_port, self.data_proc, self.audio_connection = AudioRealtime.spawn(
                 self.addr,
                 self.session_key, self.session_iv,
                 self.audio_format, buffer,
+                self.spf,
                 self.streamtype,
                 isDebug=self.isDebug,
                 aud_params=None,
@@ -90,12 +96,13 @@ class Stream:
                 'streamID': self.streamID,
             }
         elif self.streamtype == Stream.BUFFERED:
-            buffer = buff_size // self.frames_packet
+            buffer = (buff_size // self.spf) + 1
             iv = None
             self.data_port, self.data_proc, self.audio_connection = AudioBuffered.spawn(
                 self.addr,
                 self.session_key, iv,
                 self.audio_format, buffer,
+                self.spf,
                 self.streamtype,
                 isDebug=self.isDebug,
                 aud_params=None,
@@ -108,6 +115,14 @@ class Stream:
                 'audioBufferSize': self.buff_size,
                 'streamID': self.streamID,
             }
+
+        self.initialized = True
+
+    def isAudio(self):
+        return self.streamtype == Stream.BUFFERED or self.streamtype == Stream.REALTIME
+
+    def isInitialized(self):
+        return self.initialized
 
     def getStreamType(self):
         return self.streamtype
@@ -148,8 +163,9 @@ class Stream:
         self.culled = True
 
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
-            self.control_proc.terminate()
-            self.control_proc.join()
+            if self.control_proc:
+                self.control_proc.terminate()
+                self.control_proc.join()
             self.data_proc.terminate()
             self.data_proc.join()
             self.audio_connection.close()

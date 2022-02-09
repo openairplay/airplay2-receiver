@@ -6,9 +6,10 @@ from ..utils import get_file_logger, get_free_port
 
 
 class EventGeneric:
-    def __init__(self, addr=None, port=None, name='events', isDebug=False):
+    def __init__(self, addr=None, port=None, name='events', shared_key=None, isDebug=False):
         self.name = name
         self.isDebug = isDebug
+        self.shared_key = shared_key
         if port is None:
             self.port = get_free_port()
         else:
@@ -64,8 +65,8 @@ class EventGeneric:
     #     self.logger.debug(f"Close connection to {addr[0]}:{addr[1]}")
 
     @staticmethod
-    def spawn(addr=None, port=None, name='events', isDebug=False):
-        event = EventGeneric(addr, port, name, isDebug)
+    def spawn(addr=None, port=None, name='events', shared_key=None, isDebug=False):
+        event = EventGeneric(addr, port, name, shared_key, isDebug)
         p = multiprocessing.Process(target=event.serve)
         p.start()
         return event.port, p
