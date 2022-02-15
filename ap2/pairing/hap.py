@@ -905,7 +905,12 @@ class Hap:
         kTLVType_Salt <16 byte salt generated in Step 6>
         kTLVType_Flags <Pairing Type Flags> (Optional as per Step 7)
         """
-        self.ctx = srp.SRPServer(b"Pair-Setup", b"3939")
+        # Get the local PIN as set by HK previously
+        pin = self.getDevicePassword()
+        if pin:
+            self.ctx = srp.SRPServer(b"Pair-Setup", pin.encode())
+        else:
+            self.ctx = srp.SRPServer(b"Pair-Setup", b"3939")
         server_public = self.ctx.public_key
         salt = self.ctx.salt
 

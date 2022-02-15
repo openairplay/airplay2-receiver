@@ -321,6 +321,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             "/auth-setup": "handle_auth_setup",
             "/fp-setup": "handle_fp_setup",
             "/fp-setup2": "handle_auth_setup",
+            "/pair-pin-start": "handle_pair_pin_start",
             "/pair-setup": "handle_pair_setup",
             "/pair-verify": "handle_pair_verify",
             "/pair-add": "handle_pair_add",
@@ -970,6 +971,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.logger.error('Unhandled edge-case: FairPlay 2 encryption not supported.')
             self.send_error(101)
             return
+
+    def handle_pair_pin_start(self):
+        """ Should probably set the PIN status flag to 'on' here. """
+        if not self.hap:
+            self.hap = Hap(PI, DEBUG)
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
 
     def handle_pair_setup(self):
         self.handle_pair_SV('setup')
