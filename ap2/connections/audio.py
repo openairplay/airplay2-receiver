@@ -118,21 +118,25 @@ class RTP_REALTIME(RTP):
             self.block_list = []
             fbit = 1
             i = 0
-            while fbit:
-                extra_hdr = data[12 + (i * 4):16 + (i * 4)]
-                fbit = extra_hdr[0] & 0b10000000
-                block_pt = extra_hdr[0] & 0x7F
-                if fbit:
-                    self.hasredundancy = True
-                    ts_offset = (int.from_bytes(extra_hdr[1:3], byteorder='big') & 0x3FFC) >> 2
-                    block_length = int.from_bytes(extra_hdr[2:4], byteorder='big') & 0x3FF
-                    self.block_list.append((block_pt, ts_offset, block_length))
-                    # ts_offset increment is spf, e.g. 352
-                else:
-                    # Can be zero headers, but 1 F+PT byte
-                    self.payload = data[12 + (i * 4) + 1:-24]
-                    break
-                i += 1
+            try:
+                while fbit:
+                    extra_hdr = data[12 + (i * 4):16 + (i * 4)]
+                    fbit = extra_hdr[0] & 0b10000000
+                    block_pt = extra_hdr[0] & 0x7F
+                    if fbit:
+                        self.hasredundancy = True
+                        ts_offset = (int.from_bytes(extra_hdr[1:3], byteorder='big') & 0x3FFC) >> 2
+                        block_length = int.from_bytes(extra_hdr[2:4], byteorder='big') & 0x3FF
+                        self.block_list.append((block_pt, ts_offset, block_length))
+                        # ts_offset increment is spf, e.g. 352
+                    else:
+                        # Can be zero headers, but 1 F+PT byte
+                        self.payload = data[12 + (i * 4) + 1:-24]
+                        break
+                    i += 1
+            except IndexError as e:
+                # pkt was probably not one with redundancy. Corrupt?
+                pass
 
 
 class RTP_BUFFERED(RTP):
