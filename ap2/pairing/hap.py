@@ -472,7 +472,7 @@ class Hap:
             res = self.pair_setup(req)
         return Tlv8.encode(res)
 
-    def pair_setup(self, req):
+    def pair_setup(self, req, pw):
         req = Tlv8.decode(req)
         """
         2.2.1.1 Pair Setup: Pair Setup is a one-time operation that creates a
@@ -532,7 +532,7 @@ class Hap:
 
         if req[Tlv8.Tag.STATE] == PairingState.M1:
             self.logger.debug(f"-----\tPair-Setup [1/{self.pair_setup_steps_n}]")
-            res = self.pair_setup_m1_m2()
+            res = self.pair_setup_m1_m2(pw)
         elif req[Tlv8.Tag.STATE] == PairingState.M3:
             self.logger.debug(f"-----\tPair-Setup [2/{self.pair_setup_steps_n}]")
             res = self.pair_setup_m3_m4(req[Tlv8.Tag.PUBLICKEY], req[Tlv8.Tag.PROOF])
@@ -832,7 +832,7 @@ class Hap:
     def configure(self):
         return self.accessory_pairing_id, self.accessory_ltpk
 
-    def pair_setup_m1_m2(self):
+    def pair_setup_m1_m2(self, pw):
         """ 5.6.2 M2: Accessory -> iOS Device – ‘SRP Start Responseʼ
         When the accessory receives <M1>, it must perform the following steps:
 
@@ -906,9 +906,8 @@ class Hap:
         kTLVType_Flags <Pairing Type Flags> (Optional as per Step 7)
         """
         # Get the local PIN as set by HK previously
-        pin = self.getDevicePassword()
-        if pin:
-            self.ctx = srp.SRPServer(b"Pair-Setup", pin.encode())
+        if pw:
+            self.ctx = srp.SRPServer(b"Pair-Setup", pw.encode())
         else:
             self.ctx = srp.SRPServer(b"Pair-Setup", b"3939")
         server_public = self.ctx.public_key

@@ -995,7 +995,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         if op == 'verify':
             res = self.hap.pair_verify(body)
         elif op == 'setup':
-            res = self.hap.pair_setup(body)
+            res = self.hap.pair_setup(body, DEV_PROPS.getDevicePassword())
 
         self.send_response(200)
         self.send_header("Content-Length", len(res))
