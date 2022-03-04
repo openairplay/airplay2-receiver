@@ -139,7 +139,10 @@ def update_status_flags(flag=None, on=False, push=True):
     setup_global_structs(args, isDebug=DEBUG)
     # If push is false, we skip pushing out the update.
     if push:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+        if IPV6 is not None:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+        else:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
 
 
 def setup_global_structs(args, isDebug=False):
@@ -1441,7 +1444,10 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+    if IPV6 is not None:
+        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+    else:
+        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
