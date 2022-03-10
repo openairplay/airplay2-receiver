@@ -914,13 +914,15 @@ class AudioBuffered(Audio):
 
                     pre_proc = time.monotonic_ns()
                     audio = self.process(rtp)
-                    self.sink.write(audio)
-                    post_proc = time.monotonic_ns()
-                    p_write = post_proc - pre_proc
-                    p_write_avg.append(p_write * 1e-6)
-                    p_write_a = sum(p_write_avg) / len(p_write_avg)
 
-                    i += 1
+                    if audio:
+                        self.sink.write(audio)
+                        post_proc = time.monotonic_ns()
+                        p_write = post_proc - pre_proc
+                        p_write_avg.append(p_write * 1e-6)
+                        p_write_a = sum(p_write_avg) / len(p_write_avg)
+
+                        i += 1
 
     # server fills the buffer, and admits packets within desired timestamp ranges.
     def serve(self, playerconn, control_recv, control_send):
