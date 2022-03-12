@@ -1,4 +1,4 @@
-from enum import IntFlag, Enum
+from enum import Enum
 from ap2.connections.audio import AudioSetup
 
 

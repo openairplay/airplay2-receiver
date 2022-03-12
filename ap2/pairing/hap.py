@@ -1,6 +1,5 @@
 import struct
 import socket
-import hashlib
 import threading
 import os
 import traceback
