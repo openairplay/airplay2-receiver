@@ -83,29 +83,7 @@ docker run -it --rm --device /dev/snd --env AP2IFACE=eth0 --net host ap2-receive
 
 Example Docker Compose
 ```zsh
-cat << EOF > docker-compose.yaml
-
-version: '3.8'
-services:
- ap2:
-   restart: unless-stopped
-   network_mode: host
-   build: .
-   # In case we change from host mode and need to map ports.
-   # ports:
-     # - "7000:7000"
-     # - "10000-10100:10000-10100/udp"
-   volumes:
-     - ./pairings:/airplay2/pairings/
-   # devices:
-   #  - "/dev/snd"
-   environment: # All variables are optional.
-     - AP2HOSTNAME=Airplay2
-     - AP2IFACE=eth0
-     - NO_VOLUME_MANAGEMENT=true
-EOF
-
-docker-compose up
+docker-compose -f docker/docker-compose.yaml up
 ```
 
 ## Debian
