@@ -19,11 +19,12 @@ RUN apt-get update -yy && \
 	libavutil-dev \
 	libavfilter-dev \
 	libswscale-dev \
-	libswresample-dev
+	libswresample-dev \
+	&& rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /airplay2/requirements.txt
 
-RUN pip3 install -r /airplay2/requirements.txt
+RUN pip3 install -r /airplay2/requirements.txt --no-cache-dir
 
 COPY ap2-receiver.py /airplay2/ap2-receiver.py
 COPY ap2 /airplay2/ap2
