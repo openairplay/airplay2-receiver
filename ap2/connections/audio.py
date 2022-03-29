@@ -7,7 +7,6 @@ import time
 import logging
 
 import av
-import numpy
 import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Cipher import AES
