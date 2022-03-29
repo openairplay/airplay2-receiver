@@ -2,6 +2,7 @@ import socket
 import argparse
 import multiprocessing
 import random
+import tempfile  # noqa
 from threading import current_thread
 
 import pprint

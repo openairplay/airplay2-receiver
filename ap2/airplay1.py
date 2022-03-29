@@ -18,6 +18,7 @@
 #
 from Crypto.PublicKey import RSA
 import base64
+import socket  # noqa
 
 
 

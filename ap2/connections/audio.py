@@ -548,6 +548,7 @@ class Audio:
                 data = c.decrypt_and_verify(rtp.payload, rtp.tag)
             except ValueError as e:
                 self.audio_screen_logger.error(f'RTP ChaCha20_Poly1305 decrypt: {repr(e)}')
+                pass  # noqa
         return data
 
     def log(self, rtp):
@@ -571,6 +572,7 @@ class Audio:
                     return frame.planes[0].to_bytes()
             except ValueError as e:
                 self.audio_screen_logger.error(repr(e))
+                pass  # noqa
 
     def run(self, rcvr_cmd_pipe, control_conns):
         # This pipe is between player (read data) and server (write data)

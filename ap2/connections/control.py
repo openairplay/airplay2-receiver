@@ -3,6 +3,7 @@ import socket
 import multiprocessing
 from queue import Empty
 import threading
+import time  # noqa
 import enum
 
 from ..utils import get_free_socket, get_screen_logger
