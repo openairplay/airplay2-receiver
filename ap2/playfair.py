@@ -1,7 +1,5 @@
 from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Hash import SHA1
 from Crypto.PublicKey import RSA
-from Crypto import Random
 import base64
 from .utils import get_screen_logger
 from ap2.fairplay3 import Fairplay3

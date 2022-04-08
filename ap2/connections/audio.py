@@ -1,17 +1,13 @@
 import socket
-import string
 import multiprocessing
 import enum
 import threading
 import time
-import logging
 
 import av
-import numpy
 import pyaudio
 from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Cipher import AES
-from av.audio.format import AudioFormat
 from collections import deque
 from operator import attrgetter
 from operator import add
@@ -552,7 +548,7 @@ class Audio:
                 data = c.decrypt_and_verify(rtp.payload, rtp.tag)
             except ValueError as e:
                 self.audio_screen_logger.error(f'RTP ChaCha20_Poly1305 decrypt: {repr(e)}')
-                pass
+                pass  # noqa
         return data
 
     def log(self, rtp):
@@ -576,7 +572,7 @@ class Audio:
                     return frame.planes[0].to_bytes()
             except ValueError as e:
                 self.audio_screen_logger.error(repr(e))
-                pass
+                pass  # noqa
 
     def run(self, rcvr_cmd_pipe, control_conns):
         # This pipe is between player (read data) and server (write data)

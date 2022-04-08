@@ -1,13 +1,12 @@
 import select
 import socket
-import struct
 import multiprocessing
 from queue import Empty
 import threading
-import time
+import time  # noqa
 import enum
 
-from ..utils import get_file_logger, get_free_port, get_free_socket, get_screen_logger
+from ..utils import get_free_socket, get_screen_logger
 
 
 class RTCP:

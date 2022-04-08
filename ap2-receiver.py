@@ -1,14 +1,8 @@
-import os
-import sys
-import time
-import struct
 import socket
-import logging
 import argparse
-import tempfile
 import multiprocessing
 import random
-import threading
+import tempfile  # noqa
 from threading import current_thread
 
 import pprint
@@ -21,7 +15,7 @@ import netifaces as ni
 from hexdump import hexdump
 from zeroconf import IPVersion, ServiceInfo, Zeroconf, NonUniqueNameException
 from biplist import readPlistFromString, writePlistToString
-from biplist import InvalidPlistException, NotBinaryPlistException
+from biplist import InvalidPlistException
 
 from ap2.playfair import PlayFair, FairPlayAES
 from ap2.airplay1 import AP1Security
@@ -486,7 +480,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                                 s.getAudioConnection().send(f"flush_from_until_seq-{fr}-{to}")
                     except OSError as e:
                         self.logger.error(f'FLUSHBUFFERED error: {repr(e)}')
-                        pass
 
                 self.logger.debug(self.pp.pformat(plist))
 

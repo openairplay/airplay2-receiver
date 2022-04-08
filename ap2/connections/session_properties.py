@@ -1,4 +1,4 @@
-from ap2.playfair import PlayFair, FairPlayAES
+from ap2.playfair import FairPlayAES
 
 
 class Session():

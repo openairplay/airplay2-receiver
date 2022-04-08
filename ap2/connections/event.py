@@ -1,7 +1,6 @@
 import socket
 import multiprocessing
 import os
-import time
 
 from ..utils import get_file_logger, get_free_port
 
@@ -39,7 +38,7 @@ class EventGeneric:
                     data = conn.recv(1, socket.MSG_WAITALL)
                     if data:
                         event_file.write(data)
-                        pass
+                        pass  # noqa
                     else:
                         # This while loop can run away.
                         break
