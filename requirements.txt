@@ -9,4 +9,3 @@ hkdf
 cryptography
 requests
 av
-numpy
