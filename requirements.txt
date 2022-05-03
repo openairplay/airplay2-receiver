@@ -8,4 +8,4 @@ hkdf
 # pynacl
 cryptography
 requests
-av
+av==8.1.0
