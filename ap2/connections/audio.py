@@ -442,7 +442,7 @@ class Audio:
         self.session_iv = session_iv
         self.control_conns = control_conns
         sk_len = len(session_key)
-        self.key_and_iv = True if (sk_len == 16 or sk_len == 24 or sk_len == 32 and session_iv is not None) else False
+        self.key_and_iv = True if ((sk_len == 16 or sk_len == 24 or sk_len == 32) and session_iv is not None) else False
         self.set_audio_params(self, audio_format)
 
         """ variables we get via RTCP from Control class """
