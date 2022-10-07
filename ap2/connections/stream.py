@@ -35,6 +35,11 @@ class Stream:
         ccCountSender
         """
 
+        """new fields from iOS 16 which appeared once
+        ioDiscontinuityCount
+        primaryPacketDropCount
+        """
+
         """ Senders handle a stream with an ID up to 32 bits long.
         You get overflowed values back if you try with 64 bits. The sender
         gives us streamID for teardown. Receiver provides the sender with a
