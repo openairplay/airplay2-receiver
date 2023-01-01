@@ -569,7 +569,9 @@ class Audio:
             try:
                 for frame in self.codecContext.decode(packet):
                     frame = self.resampler.resample(frame)
-                    return frame.planes[0].to_bytes()
+                    if len(frame) == 1: # if no resampling was needed, resample returns [frame]
+                        frame = frame[0]
+                    return bytes(frame.planes[0])
             except ValueError as e:
                 self.audio_screen_logger.error(repr(e))
                 pass  # noqa
