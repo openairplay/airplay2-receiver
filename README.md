@@ -118,6 +118,9 @@ pip install --global-option=build_ext --global-option="-I/usr/local/Cellar/porta
 python ap2-receiver.py -m myap2 --netiface=en0
 ```
 
+Note: in recent macOS versions (e.g. Ventura), you must disable AirPlay Receiver: 
+System Settings -> AirDrop & Handoff -> AirPlay Receiver: disable.
+
 ## Windows
 
 To run the receiver please use Python 3 and do the following:
