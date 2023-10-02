@@ -411,6 +411,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                          "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH"
                          "FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT"
                          "SETPEERSX"
+                         "SETMAGICCOOKIE"
                          )
         self.end_headers()
 
@@ -861,6 +862,21 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             except OSError as e:
                 self.logger.error(f'FLUSH error: {repr(e)}')
 
+        self.send_response(200)
+        self.send_header("Server", self.version_string())
+        self.send_header("CSeq", self.headers["CSeq"])
+        self.end_headers()
+
+    def do_SETMAGICCOOKIE(self):
+        # First appeared in iOS 17 betas ( User-Agent: AirPlay/710.66.3 )
+        self.logger.info(f'{self.command}: {self.path}')
+        self.logger.debug(self.headers)
+        content_len = int(self.headers["Content-Length"])
+        if content_len > 0:
+            body = self.rfile.read(content_len)
+
+            plist = readPlistFromString(body)
+            self.logger.info(self.pp.pformat(plist))
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
