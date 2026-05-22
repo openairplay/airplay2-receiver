@@ -12,7 +12,7 @@ class Stream:
     REALTIME = 96
     BUFFERED = 103
 
-    def __init__(self, stream, addr, port=0, buff_size=0, stream_id=None, shared_key=None, isDebug=False, aud_params=None):
+    def __init__(self, stream, addr, port=0, buff_size=0, stream_id=None, shared_key=None, isDebug=False, aud_params=None, ptp_clock_array=None):
         # self.audioMode = stream["audioMode"] # default|moviePlayback
         self.isDebug = isDebug
         self.addr = addr
@@ -28,6 +28,7 @@ class Stream:
         self.control_proc = None
 
         self.shared_key = shared_key
+        self.ptp_clock_array = ptp_clock_array
         self.culled = False
         """stat fields at teardown
         ccCountAPSender
@@ -110,6 +111,7 @@ class Stream:
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
                 aud_params=None,
+                ptp_clock_array=self.ptp_clock_array,
             )
             self.descriptor = {
                 'type': self.streamtype,
@@ -133,6 +135,7 @@ class Stream:
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
                 aud_params=None,
+                ptp_clock_array=self.ptp_clock_array,
             )
             self.descriptor = {
                 'type': self.streamtype,

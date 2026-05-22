@@ -8,4 +8,9 @@ hkdf
 # pynacl
 cryptography
 requests
-av==8.1.0
+# av 8.1.0 fails to build on Python >= 3.10 (distutils.msvccompiler removed);
+# any modern PyAV (>=10) works — the codebase has been updated to use the
+# new packed/planar handling via to_ndarray().
+av
+numpy
+pycaw; sys_platform == "win32"

@@ -150,17 +150,22 @@ class FeatureFlags(IntFlag):
      iOS just fails at Pair-Setup [2/5]
     """
     def GetDefaultAirplayTwoFlags(self):
+        # Exactly matches shairport-sync master (0x1c340405c4a00 after its
+        # internal masking of bits 15/16/17/50): adds Ft11 (AudioRedundant)
+        # and Ft38 (ControlChannelEncrypt); drops Ft16/Ft17 metadata bits.
+        # iOS 17+/26 narrows acceptable feature sets — this is the closest
+        # known-working set published in any open-source receiver.
         return (
             self.Ft48TransientPairing | self.Ft47PeerManagement | self.Ft46HomeKitPairing
             | self.Ft41_PTPClock
             | self.Ft40BufferedAudio
+            | self.Ft38ControlChannelEncrypt
             | self.Ft30UnifiedAdvertisingInfo
             | self.Ft22AudioUnencrypted
             | self.Ft20ReceiveAudioAAC_LC | self.Ft19ReceiveAudioALAC | self.Ft18ReceiveAudioPCM
-            | self.Ft17AudioMetaTxtDAAP
-            | self.Ft16AudioMetaProgress
-            # | self.Ft15AudioMetaCovers
-            | self.Ft14MFiSoft_FairPlay | self.Ft09AirPlayAudio
+            | self.Ft14MFiSoft_FairPlay
+            | self.Ft11AudioRedundant
+            | self.Ft09AirPlayAudio
         )
 
     # Generic names to simplify usage (don't need to track changes in receiver)

@@ -23,6 +23,7 @@ from ap2.utils import get_volume, set_volume, set_volume_pid, get_screen_logger
 from ap2.pairing.hap import Hap, HAPSocket, LTPK, DeviceProperties
 from ap2.connections.event import EventGeneric
 from ap2.connections.stream import Stream
+from ap2.connections import ptp as ptp_slave_mod
 from ap2.connections.session_properties import Session
 from ap2.dxxp import parse_dxxp
 from ap2.bitflags import FeatureFlags, StatusFlags
@@ -208,19 +209,39 @@ def setup_global_structs(args, isDebug=False):
         'eventPort': 0  # AP2 receiver event server
     }
     if not DISABLE_PTP_MASTER:
-        if IPV6 and not IPV4:
-            addr = [
-                IPV6
-            ]
-        else:
-            # Prefer (only) IPV4
-            addr = [
-                IPV4
-            ]
+        # iOS 17+/26 uses this Addresses list as candidate PTP peer addresses
+        # and discards the session early (TEARDOWN before second SETUP) when
+        # the list is too narrow. Enumerate every non-loopback IPv4 + IPv6
+        # address on the host so iOS can pick the one that's actually
+        # routable from its end.
+        addr = []
+        try:
+            for ifname in ni.interfaces():
+                ifaddrs = ni.ifaddresses(ifname)
+                for fam in (ni.AF_INET, ni.AF_INET6):
+                    for entry in ifaddrs.get(fam, []):
+                        raw = entry.get("addr", "")
+                        if not raw:
+                            continue
+                        # Strip IPv6 zone id ("fe80::1%eth0")
+                        ip = raw.split("%", 1)[0]
+                        if ip.startswith("127.") or ip == "::1":
+                            continue
+                        if ip not in addr:
+                            addr.append(ip)
+        except Exception:  # noqa: BLE001
+            pass
+        if not addr:
+            # Fallback to the bound interface IP only
+            addr = [IPV6] if (IPV6 and not IPV4) else [IPV4]
         device_setup['timingPort'] = 0  # Seems like legacy, non PTP setting
+        # iOS 17+/26: ID must be an IP string (matching one of the Addresses),
+        # not the MAC. shairport-sync uses self_ip_string here. Pass the
+        # primary v4 (or v6 if no v4) as the IPv6/v4-shaped peer identity.
+        peer_id = IPV4 or IPV6 or DEVICE_ID
         device_setup['timingPeerInfo'] = {
             'Addresses': addr,
-            'ID': DEVICE_ID
+            'ID': peer_id,
         }
 
     stream_setup_data = {
@@ -407,12 +428,12 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             apple_response = AP1Security.compute_apple_response(self.headers["Apple-Challenge"], IPADDR_BIN, DEVICE_ID_BIN)
             self.send_header("Apple-Jack-Status", "connected; type=analog")
             self.send_header("Apple-Response", apple_response)
-        self.send_header("Public",
-                         "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH"
-                         "FLUSHBUFFERED, TEARDOWN, OPTIONS, POST, GET, PUT"
-                         "SETPEERSX"
-                         "SETMAGICCOOKIE"
-                         )
+        self.send_header(
+            "Public",
+            "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, FLUSHBUFFERED, "
+            "TEARDOWN, OPTIONS, POST, GET, PUT, "
+            "SETPEERS, SETPEERSX, SETRATEANCHORTIME, SETMAGICCOOKIE"
+        )
         self.end_headers()
 
     def do_ANNOUNCE(self):
@@ -525,7 +546,8 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 stream_id=increase_stream_id(),
                 shared_key=self.ecdh_shared_key,
                 isDebug=DEBUG,
-                aud_params=self.aud_params
+                aud_params=self.aud_params,
+                ptp_clock_array=self.server.ptp_clock_array,
             )
 
             self.server.streams.append(streamobj)
@@ -602,6 +624,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                             stream_id=increase_stream_id(),
                             shared_key=self.ecdh_shared_key,
                             isDebug=DEBUG,
+                            ptp_clock_array=self.server.ptp_clock_array,
                         )
                         self.logger.debug("Building stream channels:")
                         self.server.streams.append(s)
@@ -611,10 +634,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
                         self.logger.debug(s.getSummaryMessage())
 
+                        # pycaw matches the per-process audio session by PID;
+                        # PyAudio's sink lives in the *data* proc, not the
+                        # RTCP control proc — passing the wrong PID makes
+                        # SET_PARAMETER volume silently fail on Windows.
                         if s.getStreamType() == Stream.BUFFERED:
-                            set_volume_pid(s.getControlProc().pid)
+                            set_volume_pid(s.getDataProc().pid)
                         if s.getStreamType() == Stream.REALTIME:
-                            set_volume_pid(s.getControlProc().pid)
+                            set_volume_pid(s.getDataProc().pid)
 
                     self.logger.debug(self.pp.pformat(stream_setup_data))
                     res = writePlistToString(stream_setup_data)
@@ -785,6 +812,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 self.logger.info(self.pp.pformat(plist))
                 if plist == {} and len(self.server.streams) == 0:
                     self.server.event_proc.terminate()
+                    # Release the PTP slave too — otherwise it keeps the
+                    # UDP/319 + UDP/320 ports bound and keeps sending
+                    # Delay_Req to a sender that has already gone away.
+                    self._stop_ptp_slave()
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -811,6 +842,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
             plist = readPlistFromString(body)
             self.logger.info(self.pp.pformat(plist))
+            if isinstance(plist, list):
+                # PTPSlave binds AF_INET sockets and sendto()s the master's
+                # IP — feeding an IPv6 (e.g. fe80::...) into that call
+                # raises immediately. Filter to dotted-quad IPv4 only.
+                ips = [
+                    str(x) for x in plist
+                    if isinstance(x, (str, bytes)) and str(x).count(".") == 3
+                ]
+                self._maybe_start_ptp_slave(ips, master_clock_identity=None)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
@@ -833,7 +873,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         #   'ID': GUID,
         #   'SupportsClockPortMatchingOverride': T/F}
 
-        # SETPEERSX may require more logic when PTP is finished.
         self.logger.info(f'{self.command}: {self.path}')
         self.logger.debug(self.headers)
         content_len = int(self.headers["Content-Length"])
@@ -842,10 +881,85 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
             plist = readPlistFromString(body)
             self.logger.info(self.pp.pformat(plist))
+            # peer list is an array of dicts; pick the first IPv4 address from
+            # each peer. ClockID in iOS plists is an int — convert to 8 bytes.
+            ips = []
+            clock_id_bytes = None
+            if isinstance(plist, list):
+                for peer in plist:
+                    if not isinstance(peer, dict):
+                        continue
+                    addrs = peer.get("Addresses") or []
+                    for a in addrs:
+                        try:
+                            sa = str(a)
+                        except Exception:  # noqa: BLE001
+                            continue
+                        # Filter to dotted-quad (skip IPv6 link-local for slave's v4 sockets)
+                        if sa.count(".") == 3:
+                            ips.append(sa)
+                            break
+                    if clock_id_bytes is None and "ClockID" in peer:
+                        cid = peer["ClockID"]
+                        try:
+                            clock_id_bytes = int(cid).to_bytes(8, "big", signed=False)
+                        except (TypeError, OverflowError, ValueError):
+                            clock_id_bytes = None
+            self._maybe_start_ptp_slave(ips, master_clock_identity=clock_id_bytes)
         self.send_response(200)
         self.send_header("Server", self.version_string())
         self.send_header("CSeq", self.headers["CSeq"])
         self.end_headers()
+
+    def _maybe_start_ptp_slave(self, ips, master_clock_identity):
+        """Start (or restart) the PTP slave when the peer list changes."""
+        if not ips:
+            return
+        key = (tuple(ips), master_clock_identity)
+        if self.server.ptp_master_key == key and self.server.ptp_proc and self.server.ptp_proc.is_alive():
+            self.logger.debug("PTP slave already locked to this peer set; reuse")
+            return
+        # Tear down any old slave
+        old = self.server.ptp_proc
+        if old and old.is_alive():
+            self.logger.info("PTP peer list changed; terminating previous slave")
+            try:
+                old.terminate()
+                old.join(timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            proc, clock = ptp_slave_mod.spawn(
+                master_ips=ips,
+                master_clock_identity=master_clock_identity,
+                is_debug=DEBUG,
+                shared_array=self.server.ptp_clock_array,
+            )
+        except Exception as e:  # noqa: BLE001
+            self.logger.error(f"failed to spawn PTP slave: {e!r}")
+            return
+        self.server.ptp_proc = proc
+        self.server.ptp_clock = clock
+        self.server.ptp_master_key = key
+        self.logger.info(
+            f"PTP slave spawned: master_ips={ips} "
+            f"clockID={master_clock_identity.hex() if master_clock_identity else 'unknown'}"
+        )
+
+    def _stop_ptp_slave(self):
+        """Tear down the PTP slave process and release its UDP ports."""
+        proc = getattr(self.server, "ptp_proc", None)
+        if proc and proc.is_alive():
+            try:
+                proc.terminate()
+                proc.join(timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
+        self.server.ptp_proc = None
+        self.server.ptp_master_key = None
+        # ptp_clock_array is reused across sessions — don't drop it,
+        # only the wrapper view if held.
+        self.server.ptp_clock = None
 
     def do_FLUSH(self):
         self.logger.info(f'{self.command}: {self.path}')
@@ -1250,6 +1364,15 @@ class AP2Server(socketserver.ThreadingTCPServer):
         self.event_port = None
         self.timing_proc = None
         self.timing_port = None
+        # PTP slave state (one per session). master_key identifies which
+        # peer-list we are currently locked to so we can avoid respawning
+        # the slave on identical SETPEERSX repeats.
+        self.ptp_proc = None
+        self.ptp_clock = None
+        self.ptp_master_key = None
+        # Allocated once per server: PTP slave + every audio child reads/writes
+        # the same shared array.
+        self.ptp_clock_array = ptp_slave_mod.make_shared_array()
         self.enc_layer = False
         self.streams = []
         self.sessions = []
@@ -1368,10 +1491,15 @@ if __name__ == "__main__":
     DISABLE_PTP_MASTER = args.no_ptp_master
     DEV_PROPS = DeviceProperties(PI, DEBUG)
     DEV_NAME = args.mdns
-    if(parser.get_default('mdns') != DEV_NAME):
+    if parser.get_default('mdns') != DEV_NAME:
         DEV_PROPS.setDeviceName(DEV_NAME)
     else:
-        DEV_NAME = DEV_PROPS.getDeviceName()
+        persisted = DEV_PROPS.getDeviceName()
+        if persisted:
+            DEV_NAME = persisted
+        else:
+            # First run with default name: persist so future restarts read it back.
+            DEV_PROPS.setDeviceName(DEV_NAME)
     SCR_LOG.info(f"Name: {DEV_NAME}")
     pw = DEV_PROPS.getDevicePassword()
     hkacl = DEV_PROPS.isHKACLEnabled()
